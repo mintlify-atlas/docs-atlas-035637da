@@ -1,0 +1,187 @@
+{
+  "projectType": "framework",
+  "projectName": "Prisma ORM",
+  "projectDescription": "Next-generation ORM for Node.js & TypeScript with auto-generated type-safe query builder, declarative migrations, and multi-database support",
+  "theme": "sequoia",
+  "primaryColor": "#5A67D8",
+  "lightColor": "#7C3AED",
+  "darkColor": "#4338CA",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/schema",
+              "concepts/prisma-config",
+              "concepts/data-model",
+              "concepts/generators"
+            ]
+          },
+          {
+            "group": "Prisma Client",
+            "pages": [
+              "client/overview",
+              "client/setup",
+              "client/crud-operations",
+              "client/queries",
+              "client/relations",
+              "client/filtering-sorting",
+              "client/aggregations",
+              "client/transactions",
+              "client/middleware",
+              "client/extensions",
+              "client/error-handling"
+            ]
+          },
+          {
+            "group": "Prisma Migrate",
+            "pages": [
+              "migrate/overview",
+              "migrate/getting-started",
+              "migrate/migration-workflows",
+              "migrate/schema-prototyping",
+              "migrate/introspection",
+              "migrate/baseline"
+            ]
+          },
+          {
+            "group": "Driver Adapters",
+            "pages": [
+              "adapters/overview",
+              "adapters/postgresql",
+              "adapters/mysql",
+              "adapters/sqlite",
+              "adapters/sql-server",
+              "adapters/mongodb",
+              "adapters/edge-runtime"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/deployment",
+              "guides/performance",
+              "guides/testing",
+              "guides/connection-pooling",
+              "guides/raw-queries",
+              "guides/type-safety"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Client API",
+            "pages": [
+              "api/client-constructor",
+              "api/crud-methods",
+              "api/query-options",
+              "api/transaction-api",
+              "api/raw-query-api"
+            ]
+          },
+          {
+            "group": "CLI Commands",
+            "pages": [
+              "api/cli-overview",
+              "api/prisma-generate",
+              "api/prisma-migrate",
+              "api/prisma-db",
+              "api/prisma-studio",
+              "api/prisma-validate",
+              "api/prisma-format"
+            ]
+          },
+          {
+            "group": "Schema Reference",
+            "pages": [
+              "api/schema-datasource",
+              "api/schema-generator",
+              "api/schema-models",
+              "api/schema-fields",
+              "api/schema-attributes",
+              "api/schema-relations"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/prisma-config",
+              "api/environment-variables",
+              "api/generator-options"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Type-safe database client auto-generated from schema",
+    "Declarative schema modeling with Prisma Schema Language",
+    "Database migrations with Prisma Migrate",
+    "Database introspection and schema sync",
+    "Driver adapters for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, and edge runtimes",
+    "Transaction support with interactive and batch transactions",
+    "Middleware and extensions for custom logic",
+    "Multi-database and multi-schema support",
+    "Raw SQL query support with type-safe results",
+    "Connection pooling and performance optimization"
+  ],
+  "publicApiSurface": [
+    "PrismaClient",
+    "Prisma.validator",
+    "Prisma.sql",
+    "Prisma.raw",
+    "Prisma.join",
+    "defineConfig",
+    "env",
+    "$connect",
+    "$disconnect",
+    "$transaction",
+    "$use",
+    "$extends",
+    "$executeRaw",
+    "$queryRaw",
+    "$executeRawUnsafe",
+    "$queryRawUnsafe",
+    "findUnique",
+    "findUniqueOrThrow",
+    "findFirst",
+    "findFirstOrThrow",
+    "findMany",
+    "create",
+    "createMany",
+    "update",
+    "updateMany",
+    "upsert",
+    "delete",
+    "deleteMany",
+    "count",
+    "aggregate",
+    "groupBy",
+    "prisma generate",
+    "prisma migrate dev",
+    "prisma migrate deploy",
+    "prisma migrate reset",
+    "prisma db push",
+    "prisma db pull",
+    "prisma db seed",
+    "prisma studio",
+    "prisma validate",
+    "prisma format"
+  ]
+}
