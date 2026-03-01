@@ -1,0 +1,542 @@
+---
+title: Raw Query API
+description: Complete reference for executing raw SQL queries with Prisma Client
+---
+
+# Raw Query API
+
+Prisma Client provides methods for executing raw SQL queries when you need to perform operations that are not supported by the Prisma Client API.
+
+## $queryRaw
+
+Execute a raw SQL query that returns data (SELECT statements).
+
+### Signature
+
+```typescript
+$queryRaw<T>(query: TemplateStringsArray | Sql, ...values: any[]): Promise<T>
+```
+
+### Tagged Template Usage
+
+The recommended way to use `$queryRaw` is with tagged template literals for automatic SQL injection protection.
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+// Basic query
+const users = await prisma.$queryRaw`SELECT * FROM User WHERE age > ${18}`
+
+// With multiple parameters
+const email = 'alice@prisma.io'
+const minAge = 21
+const result = await prisma.$queryRaw`
+  SELECT * FROM User 
+  WHERE email = ${email} AND age >= ${minAge}
+`
+```
+
+<Note>
+  Values in tagged templates are automatically parameterized to prevent SQL injection.
+</Note>
+
+### Using Prisma.sql
+
+For dynamic query building, use `Prisma.sql` helper:
+
+```typescript
+import { Prisma } from '@prisma/client'
+
+const email = 'alice@prisma.io'
+const query = Prisma.sql`SELECT * FROM User WHERE email = ${email}`
+
+const users = await prisma.$queryRaw(query)
+```
+
+### Type Safety
+
+**Specify return type:**
+```typescript
+type UserResult = {
+  id: number
+  email: string
+  name: string
+}
+
+const users = await prisma.$queryRaw<UserResult[]>`
+  SELECT id, email, name FROM User
+`
+// users is now typed as UserResult[]
+```
+
+### Return Values
+
+<ResponseField name="return" type="Promise<T>">
+  Returns an array of objects representing the query results.
+  
+  The structure depends on your database:
+  - **PostgreSQL, MySQL, SQLite**: Array of objects with column names as keys
+  - **Field names are case-sensitive** and match your database schema
+</ResponseField>
+
+### Complete Examples
+
+**Simple SELECT:**
+```typescript
+const users = await prisma.$queryRaw`
+  SELECT * FROM "User" WHERE "role" = 'ADMIN'
+`
+```
+
+**JOIN queries:**
+```typescript
+const results = await prisma.$queryRaw`
+  SELECT u.name, COUNT(p.id) as postCount
+  FROM "User" u
+  LEFT JOIN "Post" p ON u.id = p."authorId"
+  GROUP BY u.id, u.name
+  HAVING COUNT(p.id) > ${5}
+`
+```
+
+**WITH clauses (CTEs):**
+```typescript
+const results = await prisma.$queryRaw`
+  WITH active_users AS (
+    SELECT * FROM "User" WHERE active = true
+  )
+  SELECT * FROM active_users WHERE age > ${25}
+`
+```
+
+---
+
+## $queryRawUnsafe
+
+Execute a raw SQL query using string concatenation (unsafe, use with caution).
+
+### Signature
+
+```typescript
+$queryRawUnsafe<T>(query: string, ...values: any[]): Promise<T>
+```
+
+<Warning>
+  **SQL Injection Risk**: `$queryRawUnsafe` does not provide automatic SQL injection protection. Only use with trusted input or when you need to dynamically construct SQL that cannot be parameterized.
+</Warning>
+
+### Usage
+
+```typescript
+// Positional parameters (database-specific syntax)
+const users = await prisma.$queryRawUnsafe(
+  'SELECT * FROM User WHERE age > $1 AND role = $2',
+  18,
+  'USER'
+)
+
+// Dynamic table names (cannot be parameterized)
+const tableName = 'User'  // Ensure this is validated!
+const results = await prisma.$queryRawUnsafe(
+  `SELECT * FROM "${tableName}" WHERE active = true`
+)
+```
+
+### Parameter Syntax by Database
+
+**PostgreSQL:**
+```typescript
+await prisma.$queryRawUnsafe(
+  'SELECT * FROM "User" WHERE age > $1',
+  18
+)
+```
+
+**MySQL:**
+```typescript
+await prisma.$queryRawUnsafe(
+  'SELECT * FROM User WHERE age > ?',
+  18
+)
+```
+
+**SQL Server:**
+```typescript
+await prisma.$queryRawUnsafe(
+  'SELECT * FROM User WHERE age > @p1',
+  18
+)
+```
+
+**SQLite:**
+```typescript
+await prisma.$queryRawUnsafe(
+  'SELECT * FROM User WHERE age > ?',
+  18
+)
+```
+
+---
+
+## $executeRaw
+
+Execute a raw SQL query that modifies data (INSERT, UPDATE, DELETE, DDL) and returns a count.
+
+### Signature
+
+```typescript
+$executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number>
+```
+
+### Usage
+
+```typescript
+// INSERT
+const count = await prisma.$executeRaw`
+  INSERT INTO "User" (email, name) 
+  VALUES (${'alice@prisma.io'}, ${'Alice'})
+`
+console.log(`Inserted ${count} row(s)`)
+
+// UPDATE
+const updated = await prisma.$executeRaw`
+  UPDATE "User" 
+  SET active = true 
+  WHERE "createdAt" < ${new Date('2024-01-01')}
+`
+console.log(`Updated ${updated} row(s)`)
+
+// DELETE
+const deleted = await prisma.$executeRaw`
+  DELETE FROM "User" 
+  WHERE active = false
+`
+console.log(`Deleted ${deleted} row(s)`)
+```
+
+<ResponseField name="return" type="Promise<number>">
+  Returns the number of rows affected by the operation.
+</ResponseField>
+
+### DDL Operations
+
+```typescript
+// Create index
+await prisma.$executeRaw`
+  CREATE INDEX idx_user_email ON "User"(email)
+`
+
+// Add column
+await prisma.$executeRaw`
+  ALTER TABLE "User" ADD COLUMN "lastLogin" TIMESTAMP
+`
+
+// Create table
+await prisma.$executeRaw`
+  CREATE TABLE IF NOT EXISTS "TempData" (
+    id SERIAL PRIMARY KEY,
+    data TEXT
+  )
+`
+```
+
+<Warning>
+  Prisma detects DDL statements (ALTER, CREATE, DROP, etc.) and shows a warning. Use Prisma Migrate for schema changes instead of raw DDL when possible.
+</Warning>
+
+---
+
+## $executeRawUnsafe
+
+Execute a raw SQL query using string concatenation that modifies data.
+
+### Signature
+
+```typescript
+$executeRawUnsafe(query: string, ...values: any[]): Promise<number>
+```
+
+<Warning>
+  **SQL Injection Risk**: Same security concerns as `$queryRawUnsafe`.
+</Warning>
+
+### Usage
+
+```typescript
+// With parameters
+const count = await prisma.$executeRawUnsafe(
+  'UPDATE "User" SET active = $1 WHERE age > $2',
+  true,
+  18
+)
+
+// Dynamic column names
+const columnName = 'active'  // Validate this!
+const result = await prisma.$executeRawUnsafe(
+  `UPDATE "User" SET "${columnName}" = true`
+)
+```
+
+---
+
+## $queryRawTyped
+
+Execute a type-safe raw SQL query using generated TypedSQL.
+
+### Signature
+
+```typescript
+$queryRawTyped<T>(typedSql: TypedSql<T>): Promise<T>
+```
+
+<Note>
+  Requires the `typedSql` preview feature to be enabled in your Prisma schema.
+</Note>
+
+### Usage
+
+First, enable the preview feature in your schema:
+
+```prisma
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["typedSql"]
+}
+```
+
+Create a SQL file in `prisma/sql/`:
+
+```sql
+-- prisma/sql/getUsersByAge.sql
+SELECT id, email, name 
+FROM "User" 
+WHERE age > :minAge
+```
+
+Generate the client:
+
+```bash
+prisma generate
+```
+
+Use the typed query:
+
+```typescript
+import { getUsersByAge } from '@prisma/client/sql'
+
+const users = await prisma.$queryRawTyped(
+  getUsersByAge({ minAge: 18 })
+)
+// users is fully typed based on the SQL query!
+```
+
+### Benefits
+
+- Full TypeScript type safety
+- Validation at generation time
+- IDE autocomplete for parameters
+- Compile-time error checking
+
+---
+
+## $runCommandRaw (MongoDB Only)
+
+Execute a raw MongoDB command.
+
+### Signature
+
+```typescript
+$runCommandRaw(command: Record<string, any>): Promise<any>
+```
+
+<Note>
+  Only available when using the MongoDB provider.
+</Note>
+
+### Usage
+
+```typescript
+// Find with MongoDB query syntax
+const result = await prisma.$runCommandRaw({
+  find: 'User',
+  filter: { age: { $gt: 18 } },
+  sort: { name: 1 },
+  limit: 10
+})
+
+// Aggregation pipeline
+const stats = await prisma.$runCommandRaw({
+  aggregate: 'User',
+  pipeline: [
+    { $match: { active: true } },
+    { $group: { _id: '$role', count: { $sum: 1 } } }
+  ]
+})
+
+// Database commands
+const dbStats = await prisma.$runCommandRaw({
+  dbStats: 1
+})
+```
+
+---
+
+## Type Mappings
+
+Prisma automatically maps between TypeScript and database types:
+
+### JavaScript → Database
+
+| JavaScript Type | PostgreSQL | MySQL | SQLite |
+|----------------|------------|-------|--------|
+| `string` | TEXT | VARCHAR | TEXT |
+| `number` | INTEGER | INT | INTEGER |
+| `bigint` | BIGINT | BIGINT | INTEGER |
+| `boolean` | BOOLEAN | BOOLEAN | INTEGER |
+| `Date` | TIMESTAMP | DATETIME | TEXT |
+| `Buffer` | BYTEA | BLOB | BLOB |
+| `Decimal` | DECIMAL | DECIMAL | TEXT |
+
+### Database → JavaScript
+
+```typescript
+// Dates are returned as Date objects
+const result = await prisma.$queryRaw`
+  SELECT "createdAt" FROM "User"
+`
+// result[0].createdAt is a Date object
+
+// BigInt for large numbers
+const bigNumbers = await prisma.$queryRaw`
+  SELECT "bigIntColumn" FROM "Data"
+`
+// result[0].bigIntColumn is a bigint
+```
+
+---
+
+## Using in Transactions
+
+Raw queries can be used inside transactions:
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  // Regular Prisma query
+  const user = await tx.user.create({
+    data: { email: 'alice@prisma.io' }
+  })
+  
+  // Raw query in the same transaction
+  await tx.$executeRaw`
+    INSERT INTO "AuditLog" ("userId", action) 
+    VALUES (${user.id}, 'USER_CREATED')
+  `
+  
+  return user
+})
+```
+
+---
+
+## Best Practices
+
+1. **Prefer Prisma Client API**: Use raw queries only when necessary.
+
+2. **Use tagged templates**: Always use `$queryRaw` (not `$queryRawUnsafe`) unless you absolutely need dynamic SQL.
+
+3. **Validate dynamic inputs**: If you must use `$queryRawUnsafe`, carefully validate all inputs.
+
+4. **Quote identifiers**: Use proper quoting for table and column names:
+   - PostgreSQL: `"User"`, `"createdAt"`
+   - MySQL: `` `User` ``, `` `createdAt` ``
+   - SQLite: `"User"`, `"createdAt"`
+
+5. **Type your results**: Always specify return types for better type safety.
+
+6. **Handle errors**: Raw queries can fail in unexpected ways.
+
+```typescript
+// ✅ Good: Type-safe with tagged template
+const users = await prisma.$queryRaw<User[]>`
+  SELECT * FROM "User" WHERE age > ${18}
+`
+
+// ❌ Bad: No type safety, SQL injection risk
+const age = req.query.age
+const users = await prisma.$queryRawUnsafe(
+  `SELECT * FROM User WHERE age > ${age}`
+)
+```
+
+---
+
+## Common Patterns
+
+### Pagination with COUNT
+
+```typescript
+type Result = { total: bigint }
+
+const [data, countResult] = await Promise.all([
+  prisma.$queryRaw<User[]>`
+    SELECT * FROM "User" 
+    ORDER BY "createdAt" DESC 
+    LIMIT ${pageSize} OFFSET ${offset}
+  `,
+  prisma.$queryRaw<Result[]>`
+    SELECT COUNT(*)::int as total FROM "User"
+  `
+])
+
+const total = Number(countResult[0].total)
+```
+
+### Full-Text Search
+
+**PostgreSQL:**
+```typescript
+const searchTerm = 'prisma'
+const results = await prisma.$queryRaw`
+  SELECT * FROM "Post"
+  WHERE to_tsvector('english', title || ' ' || content) 
+        @@ plainto_tsquery('english', ${searchTerm})
+`
+```
+
+**MySQL:**
+```typescript
+const searchTerm = 'prisma'
+const results = await prisma.$queryRaw`
+  SELECT * FROM Post
+  WHERE MATCH(title, content) AGAINST (${searchTerm} IN NATURAL LANGUAGE MODE)
+`
+```
+
+### JSON Operations
+
+**PostgreSQL:**
+```typescript
+const results = await prisma.$queryRaw`
+  SELECT * FROM "User"
+  WHERE metadata->>'role' = ${'admin'}
+`
+```
+
+**MySQL:**
+```typescript
+const results = await prisma.$queryRaw`
+  SELECT * FROM User
+  WHERE JSON_EXTRACT(metadata, '$.role') = ${'admin'}
+`
+```
+
+---
+
+## See Also
+
+- [CRUD Methods](/api/crud-methods)
+- [Transactions](/api/transaction-api)
+- [Prisma Migrate](/migrate/overview)
+- [Type Safety Guide](/guides/type-safety)

@@ -1,0 +1,288 @@
+---
+title: MySQL and MariaDB Driver Adapters
+description: Use JavaScript drivers for MySQL and MariaDB with Prisma ORM
+---
+
+# MySQL and MariaDB Driver Adapters
+
+Prisma ORM provides a driver adapter for MySQL and MariaDB databases using the official MariaDB connector.
+
+## MariaDB Adapter
+
+The `@prisma/adapter-mariadb` package enables usage of the [`mariadb`](https://github.com/mariadb-corporation/mariadb-connector-nodejs) driver with Prisma ORM. This driver works with both MariaDB and MySQL databases.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-mariadb
+```
+
+### Usage
+
+```typescript
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaMariaDb({
+  host: 'localhost',
+  user: 'your_username',
+  password: 'your_password',
+  database: 'your_database',
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Configuration Options
+
+The adapter accepts MariaDB connection configuration:
+
+```typescript
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+
+const adapter = new PrismaMariaDb({
+  // Connection
+  host: 'localhost',
+  port: 3306,
+  user: 'root',
+  password: 'password',
+  database: 'mydb',
+  
+  // Connection Pool
+  connectionLimit: 5,           // Maximum connections in pool
+  acquireTimeout: 10000,        // Timeout for getting connection from pool
+  
+  // Timeouts
+  connectTimeout: 10000,        // Connection timeout in ms
+  socketTimeout: 0,             // Socket timeout (0 = disabled)
+  
+  // SSL/TLS
+  ssl: {
+    ca: fs.readFileSync('/path/to/ca.pem'),
+    cert: fs.readFileSync('/path/to/cert.pem'),
+    key: fs.readFileSync('/path/to/key.pem'),
+  },
+  
+  // Other options
+  multipleStatements: false,    // Allow multiple SQL statements
+  timezone: 'UTC',              // Connection timezone
+  charset: 'UTF8MB4_UNICODE_CI',
+})
+```
+
+### Connection String
+
+Alternatively, you can use a connection string:
+
+```typescript
+import { createConnection } from 'mariadb'
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+
+const config = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+}
+
+const adapter = new PrismaMariaDb(config)
+```
+
+### Connection Pool Management
+
+The MariaDB driver automatically manages connection pooling:
+
+```typescript
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+
+const adapter = new PrismaMariaDb({
+  host: 'localhost',
+  user: 'root',
+  password: 'password',
+  database: 'mydb',
+  connectionLimit: 10,          // Pool size
+  idleTimeout: 30000,           // Close idle connections after 30s
+  acquireTimeout: 10000,        // Wait up to 10s for connection
+})
+```
+
+### Transaction Support
+
+The adapter supports all transaction features:
+
+```typescript
+// Interactive transactions
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' }
+  })
+  
+  const profile = await tx.profile.create({
+    data: { userId: user.id, bio: 'Hello' }
+  })
+  
+  return { user, profile }
+})
+
+// With isolation level
+const result = await prisma.$transaction(
+  async (tx) => {
+    // Your queries here
+  },
+  {
+    isolationLevel: 'SERIALIZABLE'
+  }
+)
+```
+
+### Isolation Levels
+
+Supported isolation levels:
+- `READ UNCOMMITTED`
+- `READ COMMITTED`
+- `REPEATABLE READ` (default for MySQL/MariaDB)
+- `SERIALIZABLE`
+
+### Savepoints
+
+The adapter supports nested transactions using savepoints:
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  await tx.user.create({ data: { email: 'user1@example.com' } })
+  
+  try {
+    await tx.$transaction(async (nestedTx) => {
+      await nestedTx.user.create({ data: { email: 'user2@example.com' } })
+      throw new Error('Rollback nested transaction')
+    })
+  } catch (error) {
+    // Nested transaction rolled back to savepoint
+    // Parent transaction continues
+  }
+  
+  await tx.user.create({ data: { email: 'user3@example.com' } })
+})
+```
+
+### Error Handling
+
+The adapter maps MySQL/MariaDB errors to Prisma error codes:
+
+```typescript
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  if (error.code === 'P2002') {
+    // Unique constraint violation (MySQL error 1062)
+    console.log('Duplicate email:', error.meta.target)
+  }
+  if (error.code === 'P2003') {
+    // Foreign key constraint violation (MySQL error 1452)
+    console.log('Foreign key error')
+  }
+  if (error.code === 'P2011') {
+    // Null constraint violation (MySQL error 1048)
+    console.log('Required field missing')
+  }
+}
+```
+
+Common error mappings:
+
+| MySQL Error | Prisma Code | Description |
+|-------------|-------------|-------------|
+| 1062 | P2002 | Unique constraint violation |
+| 1452 | P2003 | Foreign key constraint violation |
+| 1048 | P2011 | Null constraint violation |
+| 1406 | P2000 | Value too long for column |
+| 2002 | P1001 | Can't reach database server |
+| 1045 | P1000 | Authentication failed |
+
+### Cloud Database Support
+
+The adapter works with cloud-hosted MySQL/MariaDB databases:
+
+#### AWS RDS
+
+```typescript
+const adapter = new PrismaMariaDb({
+  host: 'mydb.123456789.us-east-1.rds.amazonaws.com',
+  port: 3306,
+  user: 'admin',
+  password: process.env.DB_PASSWORD,
+  database: 'myapp',
+  ssl: {
+    ca: fs.readFileSync('/path/to/rds-ca.pem'),
+  },
+})
+```
+
+#### Google Cloud SQL
+
+```typescript
+const adapter = new PrismaMariaDb({
+  host: '/cloudsql/project:region:instance',  // Unix socket
+  user: 'root',
+  password: process.env.DB_PASSWORD,
+  database: 'myapp',
+})
+```
+
+#### Azure Database for MySQL
+
+```typescript
+const adapter = new PrismaMariaDb({
+  host: 'myserver.mysql.database.azure.com',
+  port: 3306,
+  user: 'adminuser@myserver',
+  password: process.env.DB_PASSWORD,
+  database: 'myapp',
+  ssl: {
+    ca: fs.readFileSync('/path/to/azure-ca.pem'),
+  },
+})
+```
+
+### Performance Tips
+
+1. **Connection Pooling**: Set appropriate pool size based on your workload
+   ```typescript
+   connectionLimit: 20,  // Adjust based on concurrent queries
+   ```
+
+2. **Timeout Configuration**: Configure timeouts for your environment
+   ```typescript
+   connectTimeout: 10000,
+   acquireTimeout: 10000,
+   socketTimeout: 0,  // Disable for long-running queries
+   ```
+
+3. **Prepared Statements**: The driver uses prepared statements by default for better performance
+
+### Limitations
+
+- The adapter requires the `mariadb` npm package version 3.4.5 or later
+- Some MariaDB-specific features may not be available when connecting to MySQL
+
+### Connection String Format
+
+While the adapter primarily uses configuration objects, the underlying MariaDB driver supports connection strings:
+
+```
+mysql://user:password@host:port/database?option1=value1&option2=value2
+```
+
+Example:
+```
+mysql://root:password@localhost:3306/mydb?connectionLimit=10&timezone=UTC
+```
+
+## Next Steps
+
+- [PostgreSQL Adapters](/adapters/postgresql)
+- [SQLite Adapters](/adapters/sqlite)
+- [Edge Runtime Adapters](/adapters/edge-runtime#planetscale-adapter)
+- [Driver Adapters Overview](/adapters/overview)

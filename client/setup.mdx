@@ -1,0 +1,310 @@
+---
+title: Setting Up Prisma Client
+description: Configure Prisma Client with driver adapters for database connectivity
+---
+
+# Setting Up Prisma Client
+
+Prisma Client requires configuration to connect to your database. In Prisma 7, you must use either a driver adapter or Prisma Accelerate.
+
+## Installation
+
+Install Prisma Client in your project:
+
+```bash
+npm install @prisma/client
+```
+
+After generating your Prisma schema, run:
+
+```bash
+prisma generate
+```
+
+This generates the Prisma Client based on your schema.
+
+## Constructor Options
+
+Prisma Client accepts a configuration object with the following options:
+
+### Required: Database Connection
+
+You must provide either `adapter` or `accelerateUrl` (mutually exclusive):
+
+<ParamField path="adapter" type="SqlDriverAdapterFactory">
+  Instance of a driver adapter for direct database connections.
+  
+  ```typescript
+  import { PrismaClient } from '@prisma/client'
+  import { PrismaPg } from '@prisma/adapter-pg'
+  import { Pool } from 'pg'
+  
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool)
+  
+  const prisma = new PrismaClient({ adapter })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:75-89`
+</ParamField>
+
+<ParamField path="accelerateUrl" type="string">
+  Prisma Accelerate URL for connecting through Accelerate instead of directly to the database.
+  
+  ```typescript
+  const prisma = new PrismaClient({
+    accelerateUrl: 'prisma://accelerate.prisma-data.net/...'
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:75-89`
+</ParamField>
+
+### Optional Configuration
+
+<ParamField path="errorFormat" type="'pretty' | 'colorless' | 'minimal'" default="colorless">
+  Format of error messages.
+  
+  - `pretty`: Colored, formatted errors (development)
+  - `colorless`: Formatted without colors
+  - `minimal`: Minimal error output (production)
+  
+  Defaults to `minimal` in production, `colorless` otherwise.
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:69,394-402`
+</ParamField>
+
+<ParamField path="log" type="Array<LogLevel | LogDefinition>">
+  Configure logging output. Log levels: `query`, `info`, `warn`, `error`.
+  
+  ```typescript
+  const prisma = new PrismaClient({
+    adapter,
+    log: ['query', 'info', 'warn', 'error']
+  })
+  
+  // Or emit as events
+  const prisma = new PrismaClient({
+    adapter,
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'stdout', level: 'error' }
+    ]
+  })
+  
+  prisma.$on('query', (e) => {
+    console.log('Query:', e.query)
+    console.log('Params:', e.params)
+    console.log('Duration:', e.duration, 'ms')
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:104-119,460-469`
+</ParamField>
+
+<ParamField path="transactionOptions" type="TransactionOptions">
+  Default options for transactions.
+  
+  ```typescript
+  const prisma = new PrismaClient({
+    adapter,
+    transactionOptions: {
+      maxWait: 2000,      // Max ms to wait for transaction to start
+      timeout: 5000,      // Max ms transaction can run
+      isolationLevel: 'ReadCommitted'
+    }
+  })
+  ```
+  
+  Available isolation levels:
+  - `ReadUncommitted`
+  - `ReadCommitted`
+  - `RepeatableRead`
+  - `Snapshot`
+  - `Serializable`
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:97-102,422-426`
+</ParamField>
+
+<ParamField path="omit" type="GlobalOmitOptions">
+  Globally omit fields from all queries.
+  
+  ```typescript
+  const prisma = new PrismaClient({
+    adapter,
+    omit: {
+      user: {
+        password: true  // Never return password field
+      }
+    }
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:121,351`
+</ParamField>
+
+<ParamField path="comments" type="SqlCommenterPlugin[]">
+  SQL commenter plugins that add metadata to SQL queries as comments. Comments follow the [sqlcommenter](https://google.github.io/sqlcommenter/) format.
+  
+  ```typescript
+  import { traceContext } from '@prisma/sqlcommenter-trace-context'
+  import { queryInsights } from '@prisma/sqlcommenter-query-insights'
+  
+  const prisma = new PrismaClient({
+    adapter,
+    comments: [
+      traceContext(),
+      queryInsights()
+    ]
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:123-138`
+</ParamField>
+
+## Driver Adapters
+
+Prisma 7 uses JavaScript driver adapters instead of native binaries. Choose the adapter for your database:
+
+### PostgreSQL
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
+```
+
+**Available PostgreSQL adapters:**
+- `@prisma/adapter-pg` - node-postgres (pg) driver
+- `@prisma/adapter-neon` - Neon serverless driver
+- `@prisma/adapter-ppg` - Prisma Postgres Serverless
+
+### MySQL
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { createClient } from '@libsql/client'
+
+const libsql = createClient({ url: process.env.DATABASE_URL })
+const adapter = new PrismaLibSQL(libsql)
+const prisma = new PrismaClient({ adapter })
+```
+
+**Available MySQL-compatible adapters:**
+- `@prisma/adapter-planetscale` - PlanetScale serverless driver
+- `@prisma/adapter-mariadb` - MariaDB driver
+
+### SQLite
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import Database from 'better-sqlite3'
+
+const db = new Database('dev.db')
+const adapter = new PrismaBetterSqlite3(db)
+const prisma = new PrismaClient({ adapter })
+```
+
+**Available SQLite adapters:**
+- `@prisma/adapter-better-sqlite3` - better-sqlite3 driver
+- `@prisma/adapter-libsql` - libSQL/Turso driver
+
+### SQL Server
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaMssql } from '@prisma/adapter-mssql'
+import { ConnectionPool } from 'mssql'
+
+const pool = new ConnectionPool(process.env.DATABASE_URL)
+await pool.connect()
+const adapter = new PrismaMssql(pool)
+const prisma = new PrismaClient({ adapter })
+```
+
+### Cloudflare D1
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaD1 } from '@prisma/adapter-d1'
+
+// In Cloudflare Worker
+export default {
+  async fetch(request: Request, env: Env) {
+    const adapter = new PrismaD1(env.DB)
+    const prisma = new PrismaClient({ adapter })
+    // ... use prisma
+  }
+}
+```
+
+## Adapter Validation
+
+Prisma Client validates that your driver adapter matches your schema's provider:
+
+```typescript
+// schema.prisma has: provider = "postgresql"
+// Adapter must be postgres-compatible
+
+const adapter = new PrismaMysql(mysqlPool)  // ❌ Error!
+// PrismaClientInitializationError: The Driver Adapter `@prisma/adapter-mysql`,
+// based on `mysql`, is not compatible with the provider `postgres` specified
+// in the Prisma schema.
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:354-383`
+
+## Environment-Specific Configuration
+
+The error format automatically adjusts based on environment:
+
+```typescript
+if (process.env.NODE_ENV === 'production') {
+  // Uses 'minimal' error format
+} else if (process.env.NO_COLOR) {
+  // Uses 'colorless' format
+} else {
+  // Uses 'colorless' format (default)
+}
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:394-402`
+
+## Singleton Pattern
+
+For best practices, use a singleton instance:
+
+```typescript
+// lib/prisma.ts
+import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg(pool)
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter })
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CRUD Operations" icon="database" href="/client/crud-operations">
+    Learn how to create, read, update, and delete data
+  </Card>
+  <Card title="Queries" icon="magnifying-glass" href="/client/queries">
+    Explore advanced query patterns
+  </Card>
+</CardGroup>

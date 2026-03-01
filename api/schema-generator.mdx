@@ -1,0 +1,156 @@
+---
+title: 'Generator Block'
+description: 'Configure Prisma Client generation and output settings using generator blocks.'
+---
+
+## Overview
+
+The `generator` block defines how Prisma Client is generated from your schema. You can have multiple generator blocks for different outputs or configurations.
+
+## Basic Syntax
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+```
+
+## Required Fields
+
+### provider
+
+Specifies which generator to use:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+```
+
+Common providers:
+- `prisma-client-js` - JavaScript/TypeScript client (most common)
+- Custom generators can be referenced by package name or path
+
+## Optional Fields
+
+### output
+
+Customize the output directory for generated files:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+```
+
+Path resolution:
+- Relative paths are resolved from the schema file location
+- Default output: `node_modules/.prisma/client`
+
+### previewFeatures
+
+Enable experimental Prisma features:
+
+```prisma
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "fullTextSearch"]
+}
+```
+
+Preview features are experimental and may change. Check the [Prisma documentation](https://www.prisma.io/docs/concepts/components/preview-features) for available features.
+
+### binaryTargets
+
+Specify target platforms for engine binaries:
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl"]
+}
+```
+
+Useful for:
+- Docker containers
+- AWS Lambda
+- Different deployment platforms
+
+## Multiple Generators
+
+You can define multiple generators in a single schema:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+generator custom {
+  provider = "./custom-generator"
+  output   = "./custom-output"
+}
+```
+
+## Example Configurations
+
+### Standard Setup
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+### Custom Output
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+```
+
+### With Preview Features
+
+```prisma
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [citext]
+}
+```
+
+### Docker Deployment
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+## Best Practices
+
+1. Use descriptive generator names (e.g., `client`, `typegen`)
+2. Commit custom output paths to version control
+3. Use `binaryTargets` when deploying to different platforms
+4. Test preview features in development before production use
+5. Keep generator configuration minimal unless specific customization is needed

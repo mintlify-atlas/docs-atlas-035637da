@@ -1,0 +1,575 @@
+---
+title: Prisma Schema
+description: Complete guide to Prisma Schema Language (PSL) - syntax, models, fields, and data modeling
+---
+
+The Prisma Schema is the core of your Prisma setup. It defines your data model, database connection, and generators in a declarative way using Prisma Schema Language (PSL).
+
+## What is Prisma Schema Language?
+
+Prisma Schema Language (PSL) is a domain-specific language designed for data modeling. It provides:
+
+- **Declarative syntax**: Describe what you want, not how to achieve it
+- **Type safety**: Strong typing for models and fields
+- **Relations**: First-class support for relationships between models
+- **Database features**: Native type mappings, indexes, constraints
+
+## Schema File Location
+
+By default, Prisma looks for schema files in:
+
+- `prisma/schema.prisma` (single file)
+- Any `.prisma` files in a directory (multi-file schemas)
+
+You can customize the location using `schema` in your `prisma.config.ts`:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  schema: './database/schema.prisma',
+})
+```
+
+## Schema Structure
+
+A Prisma schema contains three main types of blocks:
+
+1. **Datasource**: Database connection configuration
+2. **Generator**: Code generation configuration
+3. **Model**: Data model definitions
+
+### Basic Schema Example
+
+```prisma schema.prisma
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/client"
+}
+
+model User {
+  id    String @id @default(uuid())
+  email String @unique
+  name  String?
+  posts Post[]
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+}
+```
+
+## Datasource Block
+
+The datasource block configures your database connection:
+
+```prisma
+datasource db {
+  provider = "postgresql"
+}
+```
+
+### Supported Providers
+
+- `postgresql` - PostgreSQL
+- `mysql` - MySQL
+- `sqlite` - SQLite
+- `sqlserver` - Microsoft SQL Server
+- `cockroachdb` - CockroachDB
+- `mongodb` - MongoDB
+
+### Database Extensions
+
+PostgreSQL extensions can be declared in the datasource:
+
+```prisma
+datasource db {
+  provider   = "postgresql"
+  extensions = [citext, postgis]
+}
+```
+
+<Note>
+In Prisma 7, database connection URLs are configured in `prisma.config.ts` instead of the schema file.
+</Note>
+
+## Generator Block
+
+The generator block configures Prisma Client generation:
+
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/client"
+}
+```
+
+### Generator Options
+
+| Option | Description | Default |
+|--------|-------------|----------|
+| `provider` | Generator to use | Required |
+| `output` | Output directory | `node_modules/.prisma/client` |
+| `previewFeatures` | Enable preview features | `[]` |
+| `binaryTargets` | Build targets for engines | Auto-detected |
+| `engineType` | Engine type (library/binary) | `library` |
+
+### Multiple Generators
+
+You can define multiple generators:
+
+```prisma
+generator client {
+  provider = "prisma-client"
+}
+
+generator docs {
+  provider = "prisma-docs-generator"
+  output   = "./docs"
+}
+```
+
+## Models
+
+Models represent entities in your application and map to database tables:
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+### Model Naming
+
+- Model names should be singular (e.g., `User`, not `Users`)
+- Use PascalCase for model names
+- Table names are automatically pluralized by default
+
+### Mapping to Database Tables
+
+Customize the table name with `@@map`:
+
+```prisma
+model User {
+  id    Int    @id
+  email String
+
+  @@map("users")
+}
+```
+
+## Fields
+
+Fields define the structure of your models:
+
+```prisma
+model User {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  name     String?
+  age      Int?
+  isActive Boolean @default(true)
+}
+```
+
+### Scalar Types
+
+Prisma supports the following scalar types:
+
+| Type | Description | Example |
+|------|-------------|----------|
+| `String` | Text | `"Hello"` |
+| `Boolean` | True/false | `true` |
+| `Int` | 32-bit integer | `42` |
+| `BigInt` | 64-bit integer | `9007199254740991` |
+| `Float` | Floating point | `3.14` |
+| `Decimal` | Precise decimals | `99.99` |
+| `DateTime` | Date and time | `2024-01-01T00:00:00Z` |
+| `Json` | JSON data | `{"key": "value"}` |
+| `Bytes` | Binary data | `Buffer` |
+
+### Field Modifiers
+
+#### Optional Fields
+
+Add `?` to make a field optional:
+
+```prisma
+model User {
+  id   Int     @id
+  name String? // Optional field
+}
+```
+
+#### Lists
+
+Add `[]` for array fields:
+
+```prisma
+model Post {
+  id   Int      @id
+  tags String[] // Array of strings
+}
+```
+
+### Field Attributes
+
+Field attributes modify individual fields:
+
+#### `@id` - Primary Key
+
+```prisma
+model User {
+  id Int @id @default(autoincrement())
+}
+```
+
+#### `@unique` - Unique Constraint
+
+```prisma
+model User {
+  email String @unique
+}
+```
+
+#### `@default` - Default Values
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  status    String   @default("active")
+  isAdmin   Boolean  @default(false)
+}
+```
+
+Default value functions:
+
+- `autoincrement()` - Auto-incrementing integer
+- `uuid()` - UUID v4
+- `cuid()` - CUID
+- `now()` - Current timestamp
+
+#### `@updatedAt` - Auto-Update Timestamp
+
+```prisma
+model Post {
+  id        Int      @id
+  updatedAt DateTime @updatedAt
+}
+```
+
+#### `@map` - Custom Column Name
+
+```prisma
+model User {
+  id        Int    @id
+  firstName String @map("first_name")
+}
+```
+
+#### `@db` - Native Database Types
+
+Specify database-specific types:
+
+```prisma
+model User {
+  id      Int     @id
+  bio     String  @db.Text
+  age     Int     @db.SmallInt
+  balance Decimal @db.Decimal(10, 2)
+}
+```
+
+PostgreSQL native types:
+
+```prisma
+model Example {
+  id              Int      @id
+  text            String   @db.Text
+  char            String   @db.Char(256)
+  varchar         String   @db.VarChar(256)
+  bit             String   @db.Bit(5)
+  varbit          String   @db.VarBit(5)
+  uuid            String   @db.Uuid
+  xml             String   @db.Xml
+  inet            String   @db.Inet
+  boolean         Boolean  @db.Boolean
+  integer         Int      @db.Integer
+  smallint        Int      @db.SmallInt
+  bigint          BigInt   @db.BigInt
+  real            Float    @db.Real
+  doubleprecision Float    @db.DoublePrecision
+  decimal         Decimal  @db.Decimal(10, 2)
+  money           Decimal  @db.Money
+  time            DateTime @db.Time
+  timestamp       DateTime @db.Timestamp
+  timestamptz     DateTime @db.Timestamptz
+  date            DateTime @db.Date
+  json            Json     @db.Json
+  jsonb           Json     @db.JsonB
+  bytea           Bytes    @db.ByteA
+}
+```
+
+### Block Attributes
+
+Block attributes apply to the entire model:
+
+#### `@@id` - Composite Primary Key
+
+```prisma
+model CourseEnrollment {
+  userId   Int
+  courseId Int
+  role     String
+
+  @@id([userId, courseId])
+}
+```
+
+#### `@@unique` - Composite Unique Constraint
+
+```prisma
+model User {
+  id        Int    @id
+  firstName String
+  lastName  String
+
+  @@unique([firstName, lastName])
+}
+```
+
+#### `@@index` - Database Index
+
+```prisma
+model Post {
+  id       Int    @id
+  title    String
+  authorId Int
+
+  @@index([authorId])
+  @@index([title, authorId])
+}
+```
+
+#### `@@map` - Custom Table Name
+
+```prisma
+model User {
+  id Int @id
+
+  @@map("app_users")
+}
+```
+
+#### `@@ignore` - Ignore Model
+
+Exclude a model from Prisma Client:
+
+```prisma
+model InternalTable {
+  id Int @id
+
+  @@ignore
+}
+```
+
+## Enums
+
+Define enumerated types:
+
+```prisma
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum TokenType {
+  EMAIL
+  API
+}
+
+model User {
+  id   Int      @id
+  role UserRole @default(STUDENT)
+}
+```
+
+### Custom Enum Values
+
+Map enum values to different database values:
+
+```prisma
+enum Status {
+  ACTIVE  @map("active")
+  PENDING @map("pending")
+  DELETED @map("deleted")
+}
+```
+
+## Comments
+
+Add documentation to your schema:
+
+```prisma
+/// User account model
+/// Stores user authentication and profile data
+model User {
+  id Int @id
+  
+  /// User's email address (used for login)
+  email String @unique
+  
+  /// Full name of the user
+  name String?
+}
+```
+
+- `///` for documentation comments (included in generated client)
+- `//` for regular comments (not included in client)
+
+## Unsupported Types
+
+For database columns that don't map to Prisma types:
+
+```prisma
+model Legacy {
+  id          Int                    @id
+  customType  Unsupported("geometry")
+}
+```
+
+<Warning>
+Fields with `Unsupported` types cannot be read or written via Prisma Client.
+</Warning>
+
+## Real-World Example
+
+Here's a complete schema from a grading application:
+
+```prisma schema.prisma
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  social    Json?
+  isAdmin   Boolean  @default(false)
+
+  courses     CourseEnrollment[]
+  testResults TestResult[]       @relation(name: "results")
+  testsGraded TestResult[]       @relation(name: "graded")
+  tokens      Token[]
+}
+
+model Token {
+  id         Int       @id @default(autoincrement())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  type       TokenType
+  emailToken String?   @unique
+  valid      Boolean   @default(true)
+  expiration DateTime
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+}
+
+model Course {
+  id            Int     @id @default(autoincrement())
+  name          String
+  courseDetails String?
+
+  members CourseEnrollment[]
+  tests   Test[]
+}
+
+model CourseEnrollment {
+  createdAt DateTime @default(now())
+  role      UserRole
+
+  userId   Int
+  courseId Int
+  user     User   @relation(fields: [userId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@id([userId, courseId])
+  @@index([userId, role])
+}
+
+model Test {
+  id        Int      @id @default(autoincrement())
+  updatedAt DateTime @updatedAt
+  name      String
+  date      DateTime
+
+  courseId    Int
+  course      Course       @relation(fields: [courseId], references: [id])
+  testResults TestResult[]
+}
+
+model TestResult {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  result    Int
+
+  studentId Int
+  student   User @relation(name: "results", fields: [studentId], references: [id])
+  graderId  Int
+  gradedBy  User @relation(name: "graded", fields: [graderId], references: [id])
+  testId    Int
+  test      Test @relation(fields: [testId], references: [id])
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+}
+
+enum TokenType {
+  EMAIL
+  API
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Model" icon="diagram-project" href="/concepts/data-model">
+    Learn about relations and data modeling
+  </Card>
+  <Card title="Prisma Config" icon="gear" href="/concepts/prisma-config">
+    Configure your Prisma project
+  </Card>
+  <Card title="Generators" icon="wand-magic-sparkles" href="/concepts/generators">
+    Understand code generation
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore Prisma's architecture
+  </Card>
+</CardGroup>

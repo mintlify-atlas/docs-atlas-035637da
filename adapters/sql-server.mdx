@@ -1,0 +1,362 @@
+---
+title: SQL Server Driver Adapter
+description: Use JavaScript driver for Microsoft SQL Server with Prisma ORM
+---
+
+# SQL Server Driver Adapter
+
+The `@prisma/adapter-mssql` package enables usage of the [`mssql`](https://www.npmjs.com/package/mssql) driver for Microsoft SQL Server and Azure SQL Database with Prisma ORM.
+
+## Installation
+
+```bash
+npm install @prisma/adapter-mssql
+```
+
+## Usage
+
+### Configuration Object
+
+```typescript
+import { PrismaMssql } from '@prisma/adapter-mssql'
+import { PrismaClient } from '@prisma/client'
+
+const config = {
+  server: 'localhost',
+  port: 1433,
+  database: 'mydb',
+  user: 'sa',
+  password: 'mypassword',
+  options: {
+    encrypt: true,                  // Use this for Azure
+    trustServerCertificate: true,   // Use this for self-signed certificates
+  },
+}
+
+const adapter = new PrismaMssql(config)
+const prisma = new PrismaClient({ adapter })
+```
+
+### JDBC Connection String
+
+You can also use a JDBC-style connection string:
+
+```typescript
+import { PrismaMssql } from '@prisma/adapter-mssql'
+import { PrismaClient } from '@prisma/client'
+
+const connectionString = 'sqlserver://localhost:1433;database=testdb;user=sa;password=mypassword;encrypt=true'
+
+const adapter = new PrismaMssql(connectionString)
+const prisma = new PrismaClient({ adapter })
+```
+
+## Configuration Options
+
+The adapter accepts configuration from the [Tedious driver](https://github.com/tediousjs/node-mssql):
+
+```typescript
+import { PrismaMssql } from '@prisma/adapter-mssql'
+
+const adapter = new PrismaMssql({
+  // Server connection
+  server: 'localhost',
+  port: 1433,
+  database: 'mydb',
+  
+  // Authentication
+  user: 'username',
+  password: 'password',
+  
+  // OR use Windows Authentication
+  domain: 'DOMAIN',
+  
+  // Connection pool
+  pool: {
+    max: 10,                        // Maximum pool size
+    min: 0,                         // Minimum pool size
+    idleTimeoutMillis: 30000,       // Close idle connections after 30s
+    acquireTimeoutMillis: 10000,    // Wait up to 10s for connection
+  },
+  
+  // Connection options
+  options: {
+    encrypt: true,                  // Use TLS encryption
+    trustServerCertificate: false,  // Validate server certificate
+    enableArithAbort: true,
+    connectionTimeout: 15000,       // Connection timeout in ms
+    requestTimeout: 30000,          // Request timeout in ms
+    port: 1433,
+    instanceName: 'SQLEXPRESS',     // SQL Server instance name
+  },
+  
+  // Connection retry
+  connectionRetryInterval: 500,     // Retry interval in ms
+})
+```
+
+## Entra ID Authentication (Azure Active Directory)
+
+The adapter supports various Entra ID authentication methods:
+
+### DefaultAzureCredential
+
+Use Azure's DefaultAzureCredential for flexible authentication:
+
+```typescript
+import { PrismaMssql } from '@prisma/adapter-mssql'
+
+const adapter = new PrismaMssql({
+  server: 'myserver.database.windows.net',
+  port: 1433,
+  database: 'mydb',
+  authentication: {
+    type: 'azure-active-directory-default',
+  },
+  options: {
+    encrypt: true,
+  },
+})
+```
+
+Or via connection string:
+```
+sqlserver://myserver.database.windows.net:1433;database=mydb;authentication=DefaultAzureCredential;encrypt=true
+```
+
+### Username/Password (Active Directory)
+
+```typescript
+const adapter = new PrismaMssql({
+  server: 'myserver.database.windows.net',
+  port: 1433,
+  database: 'mydb',
+  authentication: {
+    type: 'azure-active-directory-password',
+    options: {
+      userName: 'user@domain.com',
+      password: 'password',
+      clientId: 'your-client-id',
+    },
+  },
+  options: {
+    encrypt: true,
+  },
+})
+```
+
+Or via connection string:
+```
+sqlserver://myserver.database.windows.net:1433;database=mydb;authentication=ActiveDirectoryPassword;userName=user@domain.com;password=***;clientId=your-client-id;encrypt=true
+```
+
+### Managed Identity
+
+```typescript
+const adapter = new PrismaMssql({
+  server: 'myserver.database.windows.net',
+  port: 1433,
+  database: 'mydb',
+  authentication: {
+    type: 'azure-active-directory-msi-app-service',
+    options: {
+      clientId: 'your-managed-identity-client-id',  // Optional
+    },
+  },
+  options: {
+    encrypt: true,
+  },
+})
+```
+
+Or via connection string:
+```
+sqlserver://myserver.database.windows.net:1433;database=mydb;authentication=ActiveDirectoryManagedIdentity;clientId=your-client-id;encrypt=true
+```
+
+### Service Principal
+
+```typescript
+const adapter = new PrismaMssql({
+  server: 'myserver.database.windows.net',
+  port: 1433,
+  database: 'mydb',
+  authentication: {
+    type: 'azure-active-directory-service-principal-secret',
+    options: {
+      clientId: 'your-client-id',
+      clientSecret: 'your-client-secret',
+      tenantId: 'your-tenant-id',
+    },
+  },
+  options: {
+    encrypt: true,
+  },
+})
+```
+
+Or via connection string:
+```
+sqlserver://myserver.database.windows.net:1433;database=mydb;authentication=ActiveDirectoryServicePrincipal;userName=client-id;password=client-secret;encrypt=true
+```
+
+## Transaction Support
+
+The adapter supports all transaction features:
+
+```typescript
+// Interactive transactions
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' }
+  })
+  
+  const profile = await tx.profile.create({
+    data: { userId: user.id, bio: 'Hello' }
+  })
+  
+  return { user, profile }
+})
+```
+
+### Isolation Levels
+
+SQL Server supports all standard isolation levels plus `SNAPSHOT`:
+
+```typescript
+const result = await prisma.$transaction(
+  async (tx) => {
+    // Your queries
+  },
+  {
+    isolationLevel: 'SNAPSHOT'  // or READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+  }
+)
+```
+
+**Note**: `SNAPSHOT` isolation requires enabling it on the database:
+```sql
+ALTER DATABASE mydb SET ALLOW_SNAPSHOT_ISOLATION ON
+```
+
+### Savepoints
+
+The adapter supports nested transactions using SQL Server's savepoint syntax:
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  await tx.user.create({ data: { email: 'user1@example.com' } })
+  
+  try {
+    await tx.$transaction(async (nestedTx) => {
+      await nestedTx.user.create({ data: { email: 'user2@example.com' } })
+      throw new Error('Rollback nested transaction')
+    })
+  } catch (error) {
+    // Nested transaction rolled back to savepoint
+    // Parent transaction continues
+  }
+  
+  await tx.user.create({ data: { email: 'user3@example.com' } })
+})
+```
+
+**Note**: SQL Server uses `SAVE TRANSACTION` and `ROLLBACK TRANSACTION` for savepoints, and does not support `RELEASE SAVEPOINT`.
+
+## Error Handling
+
+The adapter maps SQL Server errors to Prisma error codes:
+
+```typescript
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  if (error.code === 'P2002') {
+    // Unique constraint violation (SQL Server error 2627)
+    console.log('Duplicate value:', error.meta.target)
+  }
+  if (error.code === 'P2003') {
+    // Foreign key constraint violation (SQL Server error 547)
+    console.log('Foreign key error')
+  }
+}
+```
+
+Common error mappings:
+
+| SQL Server Error | Prisma Code | Description |
+|------------------|-------------|-------------|
+| 2627, 2601 | P2002 | Unique constraint violation |
+| 547 | P2003 | Foreign key constraint violation |
+| 515 | P2011 | Null constraint violation |
+| 8152 | P2000 | Value too long for column |
+| 18456 | P1000 | Authentication failed |
+| -1 | P1001 | Can't reach database server |
+
+## Azure SQL Database
+
+Connection example for Azure SQL Database:
+
+```typescript
+import { PrismaMssql } from '@prisma/adapter-mssql'
+
+const adapter = new PrismaMssql({
+  server: 'myserver.database.windows.net',
+  port: 1433,
+  database: 'mydb',
+  user: 'adminuser',
+  password: process.env.AZURE_SQL_PASSWORD,
+  options: {
+    encrypt: true,                  // Required for Azure
+    trustServerCertificate: false,
+  },
+})
+```
+
+## Connection String Format
+
+JDBC-style connection string syntax:
+
+```
+sqlserver://server:port;database=dbname;user=username;password=pwd;option1=value1;option2=value2
+```
+
+Examples:
+
+```typescript
+// Basic authentication
+'sqlserver://localhost:1433;database=mydb;user=sa;password=mypassword;encrypt=true'
+
+// Windows authentication
+'sqlserver://localhost:1433;database=mydb;trustedConnection=true'
+
+// Named instance
+'sqlserver://localhost;instanceName=SQLEXPRESS;database=mydb;user=sa;password=pwd'
+
+// Azure with Entra ID
+'sqlserver://myserver.database.windows.net:1433;database=mydb;authentication=DefaultAzureCredential;encrypt=true'
+```
+
+## Features
+
+- Full transaction support with all isolation levels including `SNAPSHOT`
+- Savepoint support for nested transactions
+- Connection pooling
+- Entra ID (Azure AD) authentication
+- Windows Authentication
+- Azure SQL Database support
+- TLS/SSL encryption
+
+## Limitations
+
+- The adapter requires the `mssql` npm package version 12.2.0 or later
+- SQL Server does not support `RELEASE SAVEPOINT` (savepoints are automatically released)
+
+## Next Steps
+
+- [PostgreSQL Adapters](/adapters/postgresql)
+- [MySQL/MariaDB Adapters](/adapters/mysql)
+- [SQLite Adapters](/adapters/sqlite)
+- [Driver Adapters Overview](/adapters/overview)

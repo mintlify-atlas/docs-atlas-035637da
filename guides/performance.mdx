@@ -1,0 +1,373 @@
+---
+title: Performance Optimization
+description: Tips and techniques for optimizing Prisma ORM performance
+---
+
+## Overview
+
+Prisma ORM is designed for performance, but understanding query patterns and optimization techniques can significantly improve your application's speed and efficiency.
+
+## Query Optimization
+
+### Select Only What You Need
+
+Use `select` to retrieve only required fields:
+
+```typescript
+// Don't do this
+const users = await prisma.user.findMany()
+
+// Do this instead
+const users = await prisma.user.findMany({
+  select: {
+    id: true,
+    email: true,
+    // Only select fields you actually need
+  },
+})
+```
+
+### Avoid N+1 Queries
+
+Use `include` to load relations in a single query:
+
+```typescript
+// Bad: N+1 query pattern
+const users = await prisma.user.findMany()
+for (const user of users) {
+  const posts = await prisma.post.findMany({
+    where: { userId: user.id }
+  })
+}
+
+// Good: Single query with include
+const users = await prisma.user.findMany({
+  include: {
+    posts: true,
+  },
+})
+```
+
+### Pagination
+
+Always paginate large result sets:
+
+```typescript
+const page = 1
+const pageSize = 20
+
+const users = await prisma.user.findMany({
+  skip: (page - 1) * pageSize,
+  take: pageSize,
+  orderBy: { createdAt: 'desc' },
+})
+
+const total = await prisma.user.count()
+```
+
+<Tip>
+Use cursor-based pagination for better performance with large datasets:
+
+```typescript
+const users = await prisma.user.findMany({
+  take: 20,
+  cursor: {
+    id: lastUserId,
+  },
+  orderBy: { id: 'asc' },
+})
+```
+</Tip>
+
+## Batching and Transactions
+
+### Batch Operations
+
+Batch operations automatically combine multiple queries:
+
+```typescript
+// These queries are automatically batched
+const [user1, user2, user3] = await Promise.all([
+  prisma.user.findUnique({ where: { id: '1' } }),
+  prisma.user.findUnique({ where: { id: '2' } }),
+  prisma.user.findUnique({ where: { id: '3' } }),
+])
+```
+
+### Batch Transactions
+
+For atomic operations, use batch transactions:
+
+```typescript
+const [user, posts] = await prisma.$transaction([
+  prisma.user.create({
+    data: { email: 'user@example.com' },
+  }),
+  prisma.post.findMany({ where: { published: true } }),
+])
+```
+
+<Warning>
+Batch transactions hold database connections. Keep them short to avoid connection exhaustion.
+</Warning>
+
+### Interactive Transactions
+
+Use interactive transactions for complex workflows:
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' },
+  })
+
+  const post = await tx.post.create({
+    data: {
+      title: 'First Post',
+      userId: user.id,
+    },
+  })
+
+  return { user, post }
+})
+```
+
+### Transaction Timeouts
+
+Configure transaction timeouts based on your needs:
+
+```typescript
+const prisma = new PrismaClient({
+  transactionOptions: {
+    maxWait: 5000,    // Max time to wait for transaction to start (ms)
+    timeout: 10000,   // Max time transaction can run (ms)
+  },
+})
+
+// Or per-transaction
+await prisma.$transaction(
+  async (tx) => {
+    // Long-running transaction logic
+  },
+  {
+    maxWait: 10000,
+    timeout: 30000,
+  },
+)
+```
+
+<Tip>
+Default timeout is 5 seconds. Increase it for legitimate long-running transactions, but keep it as low as possible to prevent connection exhaustion.
+</Tip>
+
+## Connection Management
+
+### Connection Pooling
+
+Driver adapters provide built-in connection pooling:
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,                // Maximum pool size
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+})
+
+const adapter = new PrismaPg({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+### Serverless Optimization
+
+For serverless environments, reuse connections:
+
+```typescript
+// Global singleton pattern
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
+```
+
+## Index Optimization
+
+### Query Analysis
+
+Use database-specific tools to analyze query performance:
+
+```typescript
+// Enable query logging
+const prisma = new PrismaClient({
+  log: [
+    { emit: 'event', level: 'query' },
+  ],
+})
+
+prisma.$on('query', (e) => {
+  console.log('Query: ' + e.query)
+  console.log('Duration: ' + e.duration + 'ms')
+})
+```
+
+### Index Strategy
+
+Add indexes for frequently queried fields:
+
+```prisma
+model User {
+  id    String @id
+  email String @unique  // Automatically indexed
+  name  String
+  createdAt DateTime
+
+  @@index([createdAt])  // Index for sorting/filtering
+  @@index([name, email]) // Composite index
+}
+```
+
+<Warning>
+Too many indexes slow down writes. Only index fields used in `where`, `orderBy`, or join conditions.
+</Warning>
+
+## Caching Strategies
+
+### In-Memory Caching
+
+Cache frequently accessed data:
+
+```typescript
+import { LRUCache } from 'lru-cache'
+
+const cache = new LRUCache<string, any>({
+  max: 500,
+  ttl: 1000 * 60 * 5, // 5 minutes
+})
+
+async function getUser(id: string) {
+  const cached = cache.get(id)
+  if (cached) return cached
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+  })
+
+  if (user) cache.set(id, user)
+  return user
+}
+```
+
+### Query Result Caching
+
+Use Prisma Accelerate for automatic query caching:
+
+```typescript
+const users = await prisma.user.findMany({
+  cacheStrategy: {
+    ttl: 60,      // Cache for 60 seconds
+    swr: 300,     // Serve stale for 5 minutes
+  },
+})
+```
+
+## Raw Query Performance
+
+For performance-critical queries, use raw SQL:
+
+```typescript
+// Type-safe raw query
+const users = await prisma.$queryRaw<User[]>`
+  SELECT * FROM "User" 
+  WHERE age >= ${45} AND age <= ${60}
+`
+
+// With proper parameterization
+const result = await prisma.$queryRaw`
+  SELECT ${Prisma.join([
+    Prisma.raw('id'),
+    Prisma.raw('email'),
+  ])} FROM "User"
+  WHERE age IN (${Prisma.join([45, 60])})
+`
+```
+
+<Tip>
+Raw queries bypass Prisma's type safety. Use them only when necessary and always use parameterized queries to prevent SQL injection.
+</Tip>
+
+## Monitoring Performance
+
+### Query Metrics
+
+Track query performance:
+
+```typescript
+const prisma = new PrismaClient({
+  log: [
+    { emit: 'event', level: 'query' },
+  ],
+})
+
+const queryMetrics: { count: number; totalDuration: number } = {
+  count: 0,
+  totalDuration: 0,
+}
+
+prisma.$on('query', (e) => {
+  queryMetrics.count++
+  queryMetrics.totalDuration += e.duration
+})
+
+// Log metrics periodically
+setInterval(() => {
+  const avgDuration = queryMetrics.totalDuration / queryMetrics.count
+  console.log(`Avg query duration: ${avgDuration}ms`)
+  console.log(`Total queries: ${queryMetrics.count}`)
+}, 60000)
+```
+
+### Benchmarking
+
+Prisma includes comprehensive benchmarks:
+
+```bash
+# Run performance benchmarks
+pnpm bench
+
+# Run specific benchmark
+pnpm bench query-performance
+```
+
+## Best Practices
+
+1. **Select only required fields** to reduce data transfer
+2. **Use pagination** for large result sets
+3. **Avoid N+1 queries** with `include` or `select`
+4. **Batch similar queries** with `Promise.all()`
+5. **Configure connection pooling** appropriately
+6. **Add indexes** for frequently queried fields
+7. **Use transactions** for atomic operations
+8. **Monitor query performance** with logging
+9. **Cache frequently accessed data** when appropriate
+10. **Consider raw queries** for performance-critical operations
+
+## Performance Checklist
+
+- [ ] Pagination implemented for list queries
+- [ ] Indexes added for filtered/sorted fields
+- [ ] Connection pooling configured
+- [ ] N+1 queries eliminated
+- [ ] Transaction timeouts set appropriately
+- [ ] Query logging enabled in development
+- [ ] Caching strategy implemented
+- [ ] Select only necessary fields
+- [ ] Batch operations used where possible
+- [ ] Performance monitoring in place

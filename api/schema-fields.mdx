@@ -1,0 +1,423 @@
+---
+title: 'Field Types'
+description: 'Available field types and their attributes in Prisma Schema Language.'
+---
+
+## Overview
+
+Fields define the structure of your models and map to columns in your database. Each field has a type and optional attributes that control its behavior.
+
+## Scalar Types
+
+### String
+
+Text data of any length:
+
+```prisma
+model User {
+  id       Int    @id
+  name     String
+  email    String
+  bio      String?
+}
+```
+
+### Int
+
+Integer numbers:
+
+```prisma
+model Product {
+  id       Int @id
+  quantity Int
+  views    Int @default(0)
+}
+```
+
+### BigInt
+
+Large integer numbers:
+
+```prisma
+model Analytics {
+  id         Int    @id
+  views      BigInt
+  userId     BigInt
+  timestamps BigInt[]
+}
+```
+
+### Float
+
+Floating-point numbers:
+
+```prisma
+model Measurement {
+  id          Int   @id
+  temperature Float
+  humidity    Float
+}
+```
+
+### Decimal
+
+Precise decimal numbers (for currency, financial data):
+
+```prisma
+model Product {
+  id    Int     @id
+  price Decimal @db.Decimal(10, 2)
+}
+```
+
+### Boolean
+
+True/false values:
+
+```prisma
+model User {
+  id          Int     @id
+  isActive    Boolean @default(true)
+  isVerified  Boolean @default(false)
+  isAdmin     Boolean @default(false)
+}
+```
+
+### DateTime
+
+Date and time values:
+
+```prisma
+model Post {
+  id          Int      @id
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+  scheduledAt DateTime?
+}
+```
+
+### Json
+
+JSON data structures:
+
+```prisma
+model User {
+  id       Int   @id
+  metadata Json?
+  settings Json?
+  social   Json?
+}
+```
+
+### Bytes
+
+Binary data:
+
+```prisma
+model File {
+  id      Int    @id
+  content Bytes
+  hash    Bytes
+}
+```
+
+## List Types
+
+Arrays of scalar types:
+
+```prisma
+model Article {
+  id       Int      @id
+  tags     String[]
+  ratings  Int[]
+  metadata Json[]
+}
+```
+
+## Optional Fields
+
+Make fields optional with `?`:
+
+```prisma
+model User {
+  id          Int       @id
+  email       String
+  name        String?   // Optional
+  bio         String?   // Optional
+  birthDate   DateTime? // Optional
+}
+```
+
+## Native Database Types
+
+Use `@db` attribute for database-specific types.
+
+### PostgreSQL Native Types
+
+```prisma
+model Post {
+  id              Int      @id
+  title           String   @db.VarChar(255)
+  content         String   @db.Text
+  metadata        Json     @db.JsonB
+  views           BigInt   @db.BigInt
+  rating          Float    @db.Real
+  price           Decimal  @db.Decimal(10, 2)
+  published       Boolean  @db.Boolean
+  publishedAt     DateTime @db.Timestamp(6)
+  publishedAtTz   DateTime @db.Timestamptz
+  scheduledTime   DateTime @db.Time
+  scheduledDate   DateTime @db.Date
+  uuid            String   @db.Uuid
+  ipAddress       String   @db.Inet
+  caseInsensitive String   @db.Citext
+  xmlData         String   @db.Xml
+  bitData         String   @db.Bit(5)
+  varbitData      String   @db.VarBit(5)
+  smallNumber     Int      @db.SmallInt
+  regularNumber   Int      @db.Integer
+  oidValue        Int      @db.Oid
+  money           Decimal  @db.Money
+  data            Bytes    @db.ByteA
+}
+```
+
+### MySQL Native Types
+
+```prisma
+model Post {
+  id          Int      @id
+  title       String   @db.VarChar(255)
+  content     String   @db.Text
+  tinyText    String   @db.TinyText
+  mediumText  String   @db.MediumText
+  longText    String   @db.LongText
+  views       BigInt   @db.BigInt
+  tinyInt     Int      @db.TinyInt
+  smallInt    Int      @db.SmallInt
+  mediumInt   Int      @db.MediumInt
+  year        Int      @db.Year
+  decimal     Decimal  @db.Decimal(10, 2)
+  float       Float    @db.Float
+  double      Float    @db.Double
+  binary      Bytes    @db.Binary(16)
+  varBinary   Bytes    @db.VarBinary(255)
+  tinyBlob    Bytes    @db.TinyBlob
+  blob        Bytes    @db.Blob
+  mediumBlob  Bytes    @db.MediumBlob
+  longBlob    Bytes    @db.LongBlob
+  timestamp   DateTime @db.Timestamp(6)
+}
+```
+
+### SQLite Native Types
+
+```prisma
+model Post {
+  id      Int      @id
+  title   String
+  content String
+  views   Int
+  active  Boolean
+  created DateTime
+}
+```
+
+Note: SQLite has limited native type options but Prisma provides type safety at the application level.
+
+### SQL Server Native Types
+
+```prisma
+model Post {
+  id         Int      @id
+  title      String   @db.NVarChar(255)
+  content    String   @db.NVarChar(Max)
+  views      BigInt   @db.BigInt
+  smallInt   Int      @db.SmallInt
+  tinyInt    Int      @db.TinyInt
+  decimal    Decimal  @db.Decimal(10, 2)
+  money      Decimal  @db.Money
+  float      Float    @db.Float(53)
+  real       Float    @db.Real
+  timestamp  DateTime @db.DateTime2
+  smallDate  DateTime @db.SmallDateTime
+  date       DateTime @db.Date
+  time       DateTime @db.Time
+  binary     Bytes    @db.Binary(16)
+  varBinary  Bytes    @db.VarBinary(255)
+}
+```
+
+## Enum Types
+
+Define custom enumerations:
+
+```prisma
+model User {
+  id     Int      @id
+  role   UserRole
+  status Status   @default(ACTIVE)
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+```
+
+Enum lists:
+
+```prisma
+model Post {
+  id         Int          @id
+  categories Category[]
+}
+
+enum Category {
+  TECH
+  SCIENCE
+  POLITICS
+  SPORTS
+}
+```
+
+## Relation Fields
+
+Relation fields define connections between models:
+
+```prisma
+model User {
+  id    Int     @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+```
+
+See the Relations documentation for detailed information.
+
+## Unsupported Types
+
+For database types not yet supported by Prisma:
+
+```prisma
+model Legacy {
+  id          Int                    @id
+  customField Unsupported("integer")
+}
+```
+
+## Field Defaults
+
+Set default values for fields:
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  role      Role     @default(USER)
+  views     Int      @default(0)
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+```
+
+Default value functions:
+- `autoincrement()` - Auto-incrementing integer
+- `now()` - Current timestamp
+- `uuid()` - Generate UUID
+- `cuid()` - Generate CUID
+- `dbgenerated("SQL")` - Database-generated value
+
+## Auto-Update Fields
+
+Automatically update timestamp on record changes:
+
+```prisma
+model Post {
+  id        Int      @id
+  title     String
+  updatedAt DateTime @updatedAt
+}
+```
+
+## Complete Example
+
+```prisma
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String?
+  bio           String?   @db.Text
+  age           Int?
+  balance       Decimal   @db.Decimal(10, 2)
+  isVerified    Boolean   @default(false)
+  role          UserRole  @default(USER)
+  tags          String[]
+  metadata      Json?
+  avatarData    Bytes?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  posts         Post[]
+  profile       Profile?
+}
+
+model Profile {
+  id        Int     @id @default(autoincrement())
+  bio       String  @db.Text
+  website   String?
+  userId    Int     @unique
+  user      User    @relation(fields: [userId], references: [id])
+}
+
+model Post {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  content     String   @db.Text
+  published   Boolean  @default(false)
+  viewCount   Int      @default(0)
+  rating      Float    @default(0.0)
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+  authorId    Int
+  author      User     @relation(fields: [authorId], references: [id])
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+```
+
+## Best Practices
+
+1. Use appropriate scalar types for your data
+2. Leverage native database types for optimization
+3. Use `Decimal` for financial data, not `Float`
+4. Make fields optional with `?` only when necessary
+5. Use enums for fields with fixed sets of values
+6. Add `createdAt` and `updatedAt` timestamp fields
+7. Use lists sparingly (consider relations instead)
+8. Choose database-native types for better performance
+9. Use `@db` attributes for fine-grained control over column types

@@ -1,0 +1,264 @@
+---
+title: 'prisma studio'
+description: 'Browse and edit your database data with Prisma Studio'
+---
+
+# prisma studio
+
+Browse your data with Prisma Studio - a visual database browser.
+
+## Usage
+
+```bash
+prisma studio [options]
+```
+
+## Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma studio --help
+  ```
+</ParamField>
+
+<ParamField path="--port" type="number">
+  Port to start Prisma Studio on.
+  
+  **Alias:** `-p`
+  
+  **Default:** 51212
+  
+  ```bash
+  prisma studio --port 5555
+  ```
+</ParamField>
+
+<ParamField path="--browser" type="string">
+  Browser to open Prisma Studio in. Use `none` to prevent opening a browser.
+  
+  **Alias:** `-b`
+  
+  **Environment variable:** `BROWSER`
+  
+  ```bash
+  prisma studio --browser firefox
+  prisma studio --browser none
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma studio --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Database connection string. Overrides the URL in your Prisma config file.
+  
+  ```bash
+  prisma studio --url="postgresql://user:password@localhost:5432/mydb"
+  ```
+</ParamField>
+
+## Examples
+
+### Start Studio on default port
+
+```bash
+prisma studio
+```
+
+**Output:**
+```
+Prisma Studio is running at: http://localhost:51212
+```
+
+Studio automatically opens in your default browser.
+
+### Start on custom port
+
+```bash
+prisma studio --port 5555
+```
+
+**Output:**
+```
+Prisma Studio is running at: http://localhost:5555
+```
+
+### Specify a browser
+
+```bash
+prisma studio --browser firefox
+```
+
+Opens Studio in Firefox instead of the default browser.
+
+### Prevent opening browser
+
+```bash
+prisma studio --browser none
+```
+
+**Using environment variable:**
+```bash
+BROWSER=none prisma studio
+```
+
+Starts the server but doesn't open a browser window.
+
+### Custom config file
+
+```bash
+prisma studio --config=./prisma.config.ts
+```
+
+### Override database URL
+
+```bash
+prisma studio --url="postgresql://user:password@localhost:5432/mydb"
+```
+
+Connects to the specified database instead of using the URL from your config file.
+
+## Features
+
+### Browse Data
+
+- View all tables/models in your database
+- Paginate through records
+- Sort by any column
+- Filter records with powerful query builders
+
+### Edit Data
+
+- Create new records
+- Update existing records
+- Delete records
+- Edit related records through relations
+
+### Relations
+
+- Navigate through relations
+- Create and link related records
+- View relation counts
+- Disconnect relations
+
+### Search and Filter
+
+- Text search across fields
+- Advanced filtering with multiple conditions
+- Date range filters
+- Boolean filters
+
+## Supported Databases
+
+Prisma Studio supports all databases that Prisma supports:
+
+- **PostgreSQL** (including Prisma Postgres, Neon, Supabase, etc.)
+- **MySQL** (including PlanetScale)
+- **SQLite** (including Turso, Cloudflare D1)
+- **SQL Server**
+- **MongoDB** (limited support)
+
+### Protocol Support
+
+| Protocol | Support |
+|----------|---------||
+| `postgres://`, `postgresql://` | ✅ Full |
+| `prisma+postgres://` | ✅ Full (Prisma Accelerate) |
+| `mysql://` | ✅ Full |
+| `file:` | ✅ Full (SQLite) |
+| `sqlserver://` | ❌ Not supported yet |
+
+## Connection Handling
+
+### Local SQLite
+
+For SQLite databases, Studio uses:
+
+1. Node.js built-in `sqlite` module (Node.js >=22.5)
+2. Falls back to `better-sqlite3` (if installed)
+3. Falls back to Deno or Bun SQLite modules (if available)
+
+```bash
+prisma studio --url="file:./dev.db"
+```
+
+### Remote PostgreSQL
+
+```bash
+prisma studio --url="postgresql://user:password@host:5432/database"
+```
+
+### Prisma Accelerate
+
+```bash
+prisma studio --url="prisma+postgres://accelerate.prisma-data.net/?api_key=YOUR_API_KEY"
+```
+
+## Security Considerations
+
+⚠️ **Warning:** Prisma Studio provides direct database access:
+
+- Only use on trusted networks
+- Don't expose Studio ports to the internet
+- Use `--browser none` in production environments
+- Consider access controls for sensitive data
+
+## Port Conflicts
+
+If the default port (51212) is in use, Prisma Studio automatically finds an available port:
+
+```
+Prisma Studio is running at: http://localhost:49876
+```
+
+Or specify a port explicitly:
+
+```bash
+prisma studio --port 5555
+```
+
+## Stopping Studio
+
+To stop Prisma Studio, press `Ctrl+C` in the terminal where it's running.
+
+## Troubleshooting
+
+### Database Connection Errors
+
+If Studio can't connect to your database:
+
+1. Verify your connection string is correct
+2. Check that the database server is running
+3. Ensure network connectivity
+4. Verify authentication credentials
+
+### Port Already in Use
+
+```bash
+prisma studio --port 5556
+```
+
+Try a different port if the default is occupied.
+
+### Browser Doesn't Open
+
+Manually navigate to the URL shown in the terminal:
+
+```
+Prisma Studio is running at: http://localhost:51212
+```
+
+## Related Commands
+
+- [`prisma generate`](/api/prisma-generate) - Generate Prisma Client
+- [`prisma db push`](/api/prisma-db) - Push schema changes to database
+- [`prisma db pull`](/api/prisma-db) - Pull schema from database

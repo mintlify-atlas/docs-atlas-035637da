@@ -1,0 +1,410 @@
+---
+title: CRUD Operations
+description: Create, read, update, and delete data with Prisma Client
+---
+
+# CRUD Operations
+
+Prisma Client provides intuitive methods for creating, reading, updating, and deleting records in your database.
+
+## Create
+
+### create()
+
+Create a single record:
+
+```typescript
+const user = await prisma.user.create({
+  data: {
+    email: 'alice@example.com',
+    name: 'Alice'
+  }
+})
+```
+
+**With relations:**
+
+```typescript
+const user = await prisma.user.create({
+  data: {
+    email: 'alice@example.com',
+    name: 'Alice',
+    posts: {
+      create: [
+        { title: 'First Post', published: true },
+        { title: 'Second Post', published: false }
+      ]
+    }
+  },
+  include: {
+    posts: true
+  }
+})
+```
+
+### createMany()
+
+Create multiple records in a single operation:
+
+```typescript
+const result = await prisma.user.createMany({
+  data: [
+    { email: 'alice@example.com', name: 'Alice' },
+    { email: 'bob@example.com', name: 'Bob' },
+    { email: 'charlie@example.com', name: 'Charlie' }
+  ],
+  skipDuplicates: true  // Skip records that violate unique constraints
+})
+
+console.log(`Created ${result.count} users`)
+```
+
+**Note:** `createMany` does not return created records, only the count. It also doesn't support nested creates.
+
+## Read
+
+### findUnique()
+
+Find a single record by unique field:
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: {
+    email: 'alice@example.com'
+  }
+})
+// Returns: User | null
+```
+
+**Compound unique constraints:**
+
+```typescript
+const post = await prisma.post.findUnique({
+  where: {
+    authorId_title: {
+      authorId: '123',
+      title: 'My Post'
+    }
+  }
+})
+```
+
+### findUniqueOrThrow()
+
+Throws error if record not found:
+
+```typescript
+try {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { email: 'alice@example.com' }
+  })
+} catch (error) {
+  // PrismaClientKnownRequestError with code P2025
+  console.error('User not found')
+}
+```
+
+### findFirst()
+
+Find first matching record:
+
+```typescript
+const user = await prisma.user.findFirst({
+  where: {
+    email: {
+      contains: '@example.com'
+    }
+  },
+  orderBy: {
+    createdAt: 'desc'
+  }
+})
+// Returns: User | null
+```
+
+### findFirstOrThrow()
+
+Throws error if no match found:
+
+```typescript
+const user = await prisma.user.findFirstOrThrow({
+  where: {
+    email: {
+      contains: '@example.com'
+    }
+  }
+})
+```
+
+### findMany()
+
+Find multiple records:
+
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    email: {
+      endsWith: '@example.com'
+    }
+  },
+  take: 10,
+  skip: 0,
+  orderBy: {
+    createdAt: 'desc'
+  }
+})
+// Returns: User[]
+```
+
+**Always returns an array**, even if empty:
+
+```typescript
+const users = await prisma.user.findMany({
+  where: { email: 'nonexistent@example.com' }
+})
+console.log(users)  // []
+```
+
+## Update
+
+### update()
+
+Update a single record:
+
+```typescript
+const user = await prisma.user.update({
+  where: {
+    email: 'alice@example.com'
+  },
+  data: {
+    name: 'Alice Smith'
+  }
+})
+```
+
+**Atomic operations:**
+
+```typescript
+const user = await prisma.user.update({
+  where: { id: '123' },
+  data: {
+    age: { increment: 1 },        // age = age + 1
+    credit: { decrement: 10.50 },  // credit = credit - 10.50
+    posts: { increment: 1 }        // posts = posts + 1
+  }
+})
+```
+
+Available atomic operations:
+- `increment`: Add to numeric field
+- `decrement`: Subtract from numeric field
+- `multiply`: Multiply numeric field
+- `divide`: Divide numeric field
+
+Source: `/home/daytona/workspace/source/packages/client/tests/functional/0-legacy-ports/atomic-increment-decrement/`
+
+**Update relations:**
+
+```typescript
+const user = await prisma.user.update({
+  where: { id: '123' },
+  data: {
+    posts: {
+      create: { title: 'New Post' },
+      updateMany: {
+        where: { published: false },
+        data: { published: true }
+      },
+      deleteMany: {
+        where: { views: { lt: 10 } }
+      }
+    }
+  }
+})
+```
+
+### updateMany()
+
+Update multiple records:
+
+```typescript
+const result = await prisma.user.updateMany({
+  where: {
+    email: {
+      contains: '@example.com'
+    }
+  },
+  data: {
+    verified: true
+  }
+})
+
+console.log(`Updated ${result.count} users`)
+```
+
+**Note:** `updateMany` returns only the count, not the updated records.
+
+### upsert()
+
+Update existing record or create if it doesn't exist:
+
+```typescript
+const user = await prisma.user.upsert({
+  where: {
+    email: 'alice@example.com'
+  },
+  update: {
+    name: 'Alice Smith'
+  },
+  create: {
+    email: 'alice@example.com',
+    name: 'Alice Smith'
+  }
+})
+```
+
+## Delete
+
+### delete()
+
+Delete a single record:
+
+```typescript
+const user = await prisma.user.delete({
+  where: {
+    email: 'alice@example.com'
+  }
+})
+```
+
+**Throws error if record doesn't exist** (P2025).
+
+### deleteMany()
+
+Delete multiple records:
+
+```typescript
+const result = await prisma.user.deleteMany({
+  where: {
+    email: {
+      contains: '@example.com'
+    }
+  }
+})
+
+console.log(`Deleted ${result.count} users`)
+```
+
+**Delete all records:**
+
+```typescript
+await prisma.user.deleteMany({})
+// Or
+await prisma.user.deleteMany()
+```
+
+## Fluent API
+
+Certain operations return a fluent API for traversing relations:
+
+```typescript
+// Fluent API allows chaining relation queries
+const posts = await prisma.user
+  .findUnique({ where: { email: 'alice@example.com' } })
+  .posts()
+
+// Equivalent to:
+const user = await prisma.user.findUnique({
+  where: { email: 'alice@example.com' },
+  include: { posts: true }
+})
+const posts = user?.posts
+```
+
+**Available for:**
+- `findUnique()`
+- `findUniqueOrThrow()`
+- `findFirst()`
+- `findFirstOrThrow()`
+- `create()`
+- `update()`
+- `upsert()`
+- `delete()`
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/model/applyModel.ts:24-33`
+
+## Field Selection
+
+All read and write operations support field selection:
+
+### select
+
+Choose specific fields:
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { email: 'alice@example.com' },
+  select: {
+    id: true,
+    email: true,
+    name: true
+    // password field excluded
+  }
+})
+```
+
+### include
+
+Include relations:
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { email: 'alice@example.com' },
+  include: {
+    posts: true,
+    profile: true
+  }
+})
+```
+
+**Cannot use `select` and `include` together** on the same level.
+
+See [Relations](/client/relations) for more details.
+
+## Return Types
+
+Operation return types:
+
+| Operation | Return Type | Notes |
+|-----------|-------------|-------|
+| `create()` | `Model` | Single record |
+| `createMany()` | `{ count: number }` | Count only |
+| `findUnique()` | `Model \| null` | Null if not found |
+| `findUniqueOrThrow()` | `Model` | Throws if not found |
+| `findFirst()` | `Model \| null` | Null if not found |
+| `findFirstOrThrow()` | `Model` | Throws if not found |
+| `findMany()` | `Model[]` | Empty array if none |
+| `update()` | `Model` | Throws if not found |
+| `updateMany()` | `{ count: number }` | Count only |
+| `upsert()` | `Model` | Never null |
+| `delete()` | `Model` | Throws if not found |
+| `deleteMany()` | `{ count: number }` | Count only |
+
+Source: Model operations defined in `/home/daytona/workspace/source/packages/client/src/runtime/core/model/applyModel.ts:63-126`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Queries" icon="magnifying-glass" href="/client/queries">
+    Learn advanced query patterns
+  </Card>
+  <Card title="Relations" icon="link" href="/client/relations">
+    Work with relations and nested data
+  </Card>
+  <Card title="Filtering" icon="filter" href="/client/filtering-sorting">
+    Filter and sort your data
+  </Card>
+  <Card title="Transactions" icon="arrows-rotate" href="/client/transactions">
+    Ensure data consistency with transactions
+  </Card>
+</CardGroup>

@@ -1,0 +1,383 @@
+---
+title: 'prisma.config.ts Reference'
+description: 'Complete reference for the Prisma configuration file'
+---
+
+## Overview
+
+The `prisma.config.ts` file is the central configuration file for your Prisma project. It replaces the datasource URLs and other configuration previously stored in `schema.prisma`, providing a type-safe, programmatic way to configure Prisma.
+
+## File Location
+
+By default, Prisma looks for `prisma.config.ts` in the following locations:
+
+- `./prisma.config.ts` (project root)
+- `./.config/prisma.ts`
+
+You can specify a custom location using the `--config` flag with CLI commands.
+
+## Supported File Extensions
+
+Prisma supports the following configuration file formats:
+
+- `.ts` - TypeScript
+- `.js` - JavaScript
+- `.mjs` - ES Module
+- `.cjs` - CommonJS
+- `.mts` - TypeScript ES Module
+- `.cts` - TypeScript CommonJS
+
+## Basic Structure
+
+```typescript
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  // Configuration options
+})
+```
+
+<Note>
+While you can export a plain object without using `defineConfig`, using the function provides better type safety and validation.
+</Note>
+
+## Configuration Options
+
+### datasource
+
+Defines the database connection configuration.
+
+<ParamField path="datasource.url" type="string">
+  The database connection URL. Required for migration and introspection commands.
+
+  ```typescript
+  export default defineConfig({
+    datasource: {
+      url: 'postgresql://user:password@localhost:5432/mydb'
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="datasource.shadowDatabaseUrl" type="string">
+  The shadow database URL used during migrations for diffing. Optional.
+
+  ```typescript
+  export default defineConfig({
+    datasource: {
+      url: 'postgresql://user:password@localhost:5432/mydb',
+      shadowDatabaseUrl: 'postgresql://user:password@localhost:5432/shadow'
+    }
+  })
+  ```
+</ParamField>
+
+### schema
+
+Specifies the path to your Prisma schema file or directory.
+
+<ParamField path="schema" type="string">
+  Path to a single `.prisma` file or a directory containing multiple `.prisma` files.
+
+  ```typescript
+  // Single schema file
+  export default defineConfig({
+    schema: './prisma/schema.prisma'
+  })
+
+  // Directory with multiple schema files
+  export default defineConfig({
+    schema: './prisma/schemas'
+  })
+  ```
+</ParamField>
+
+<Note>
+Paths can be absolute or relative. Relative paths are resolved from the config file location.
+</Note>
+
+### migrations
+
+Configures Prisma Migrate behavior.
+
+<ParamField path="migrations.path" type="string">
+  Directory where migration files are stored and looked up.
+
+  ```typescript
+  export default defineConfig({
+    migrations: {
+      path: './prisma/migrations'
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="migrations.seed" type="string">
+  Command to run for database seeding after migrations are applied.
+
+  ```typescript
+  export default defineConfig({
+    migrations: {
+      seed: 'tsx prisma/seed.ts'
+    }
+  })
+  ```
+
+  Examples:
+  - TypeScript: `'tsx prisma/seed.ts'`
+  - Node.js: `'node prisma/seed.js'`
+  - Shell script: `'./prisma/seed.sh'`
+</ParamField>
+
+<ParamField path="migrations.initShadowDb" type="string">
+  SQL script to set up external tables and enums during migration diffing. Requires `experimental.externalTables` to be enabled.
+
+  ```typescript
+  export default defineConfig({
+    experimental: {
+      externalTables: true
+    },
+    migrations: {
+      initShadowDb: 'CREATE TABLE "User" ("id" SERIAL PRIMARY KEY);'
+    }
+  })
+  ```
+</ParamField>
+
+### tables
+
+Configures external table management.
+
+<ParamField path="tables.external" type="string[]">
+  List of tables that are externally managed. Prisma will not generate migrations for these tables but will include them in the schema and client API. Requires `experimental.externalTables` to be enabled.
+
+  ```typescript
+  export default defineConfig({
+    experimental: {
+      externalTables: true
+    },
+    tables: {
+      external: ['audit_log', 'public.legacy_users']
+    }
+  })
+  ```
+
+  You can specify schema-qualified table names: `'schema_name.table_name'`
+</ParamField>
+
+### enums
+
+Configures external enum management.
+
+<ParamField path="enums.external" type="string[]">
+  List of enums that are externally managed. Prisma will not generate migrations for these enums but will include them in the schema and client API. Requires `experimental.externalTables` to be enabled.
+
+  ```typescript
+  export default defineConfig({
+    experimental: {
+      externalTables: true
+    },
+    enums: {
+      external: ['UserRole', 'Status']
+    }
+  })
+  ```
+</ParamField>
+
+### views
+
+Configures database views.
+
+<ParamField path="views.path" type="string">
+  Directory containing view definition SQL files (`*.sql`).
+
+  ```typescript
+  export default defineConfig({
+    views: {
+      path: './prisma/views'
+    }
+  })
+  ```
+</ParamField>
+
+### typedSql
+
+Configures the TypedSQL feature.
+
+<ParamField path="typedSql.path" type="string">
+  Directory containing TypedSQL query files (`*.sql`).
+
+  ```typescript
+  export default defineConfig({
+    typedSql: {
+      path: './prisma/queries'
+    }
+  })
+  ```
+</ParamField>
+
+### experimental
+
+Enables experimental features.
+
+<ParamField path="experimental.externalTables" type="boolean">
+  Enables support for external tables and enums. Required when using `tables.external`, `enums.external`, or `migrations.initShadowDb`.
+
+  ```typescript
+  export default defineConfig({
+    experimental: {
+      externalTables: true
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="experimental.extensions" type="boolean">
+  Enables support for Prisma extensions configuration in the config file. Required when using the `extensions` option.
+
+  ```typescript
+  export default defineConfig({
+    experimental: {
+      extensions: true
+    },
+    extensions: {
+      // Extension configuration
+    }
+  })
+  ```
+</ParamField>
+
+## Complete Example
+
+```typescript
+import path from 'node:path'
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  // Database configuration
+  datasource: {
+    url: env('DATABASE_URL'),
+    shadowDatabaseUrl: env('SHADOW_DATABASE_URL')
+  },
+
+  // Schema location
+  schema: './prisma/schema.prisma',
+
+  // Migrations configuration
+  migrations: {
+    path: './prisma/migrations',
+    seed: 'tsx prisma/seed.ts'
+  },
+
+  // Views and TypedSQL
+  views: {
+    path: './prisma/views'
+  },
+  typedSql: {
+    path: './prisma/queries'
+  },
+
+  // External tables configuration
+  experimental: {
+    externalTables: true
+  },
+  tables: {
+    external: ['audit_log', 'legacy_data']
+  },
+  enums: {
+    external: ['UserRole']
+  }
+})
+```
+
+## Path Resolution
+
+### Relative Paths
+
+Relative paths in the configuration are resolved from the directory containing the config file:
+
+```typescript
+// If prisma.config.ts is at /project/prisma.config.ts
+export default defineConfig({
+  schema: './prisma/schema.prisma', // Resolves to /project/prisma/schema.prisma
+  migrations: {
+    path: './db/migrations' // Resolves to /project/db/migrations
+  }
+})
+```
+
+### Absolute Paths
+
+You can use absolute paths or Node.js path utilities:
+
+```typescript
+import path from 'node:path'
+import process from 'node:process'
+import { defineConfig } from '@prisma/config'
+
+const cwd = process.cwd()
+
+export default defineConfig({
+  schema: path.join(cwd, 'custom', 'schema.prisma'),
+  migrations: {
+    path: path.join(cwd, 'custom', 'migrations')
+  }
+})
+```
+
+## Validation
+
+Prisma validates your configuration at load time:
+
+- **Type Safety**: When using TypeScript, configuration errors are caught at authoring time
+- **Runtime Validation**: Invalid configurations throw errors with clear messages
+- **Experimental Features**: Features requiring experimental flags will throw errors if the flag is not enabled
+
+### Common Validation Errors
+
+```typescript
+// ❌ Error: requires experimental.externalTables
+export default defineConfig({
+  tables: {
+    external: ['users']
+  }
+})
+
+// ✅ Correct
+export default defineConfig({
+  experimental: {
+    externalTables: true
+  },
+  tables: {
+    external: ['users']
+  }
+})
+```
+
+## Type Safety
+
+For better type checking without using `defineConfig`, you can use the `satisfies` operator:
+
+```typescript
+import type { PrismaConfig } from '@prisma/config'
+
+export default {
+  datasource: {
+    url: 'postgresql://localhost:5432/mydb'
+  },
+  schema: './prisma/schema.prisma'
+} satisfies PrismaConfig
+```
+
+## CLI Integration
+
+All Prisma CLI commands support the `--config` flag to specify a custom config location:
+
+```bash
+prisma migrate dev --config ./custom/path/prisma.config.ts
+prisma generate --config ./prisma.config.ts
+prisma db push --config ./config/prisma.ts
+```
+
+If no `--config` flag is provided, Prisma searches for the config file in default locations.

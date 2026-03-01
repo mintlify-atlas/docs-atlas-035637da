@@ -1,0 +1,248 @@
+---
+title: MongoDB adapter
+description: Use Prisma ORM with MongoDB using the official MongoDB driver
+---
+
+Prisma ORM supports MongoDB through its native connector. Unlike other databases, MongoDB doesn't require a separate driver adapter because Prisma has built-in support for MongoDB.
+
+## Overview
+
+MongoDB is a document-oriented NoSQL database. Prisma's MongoDB connector provides:
+
+- Document-based data modeling
+- Embedded documents and arrays
+- Native MongoDB queries with `findRaw` and `aggregateRaw`
+- Type-safe Prisma Client API
+- Support for MongoDB-specific features
+
+## Installation
+
+Install the Prisma CLI and Prisma Client:
+
+<CodeGroup>
+```bash npm
+npm install prisma --save-dev
+npm install @prisma/client
+```
+
+```bash yarn
+yarn add -D prisma
+yarn add @prisma/client
+```
+
+```bash pnpm
+pnpm add -D prisma
+pnpm add @prisma/client
+```
+</CodeGroup>
+
+## Configuration
+
+### Schema configuration
+
+Configure MongoDB in your Prisma schema:
+
+```prisma
+datasource db {
+  provider = "mongodb"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+model User {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  email String @unique
+  name  String?
+  posts Post[]
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String   @db.ObjectId
+}
+```
+
+### Connection configuration
+
+Create a `prisma.config.ts` file:
+
+```typescript
+import { defineConfig, env } from 'prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+  },
+})
+```
+
+Set your MongoDB connection string in the environment:
+
+```bash
+DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/myDatabase?retryWrites=true&w=majority"
+```
+
+## Usage
+
+### Basic setup
+
+After configuring your schema and connection, generate the Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+Then use the generated client in your application:
+
+```typescript
+import { PrismaClient } from './generated/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  // Create a user
+  const user = await prisma.user.create({
+    data: {
+      email: 'alice@prisma.io',
+      name: 'Alice',
+    },
+  })
+
+  // Find all users
+  const users = await prisma.user.findMany()
+  
+  console.log(users)
+}
+
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect())
+```
+
+## MongoDB-specific features
+
+### ObjectId type
+
+MongoDB uses ObjectId for primary keys. Always use `@db.ObjectId` attribute:
+
+```prisma
+model User {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+}
+```
+
+### Embedded documents
+
+MongoDB supports embedded documents using composite types:
+
+```prisma
+type Address {
+  street  String
+  city    String
+  country String
+}
+
+model User {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  email   String  @unique
+  address Address
+}
+```
+
+### Raw database access
+
+Use `findRaw` and `aggregateRaw` for native MongoDB queries:
+
+```typescript
+// Raw find query
+const result = await prisma.user.findRaw({
+  filter: { email: { $regex: '.*prisma.*' } },
+})
+
+// Aggregation pipeline
+const aggregation = await prisma.user.aggregateRaw({
+  pipeline: [
+    { $match: { published: true } },
+    { $group: { _id: '$authorId', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ],
+})
+```
+
+### Run database commands
+
+Execute MongoDB database commands:
+
+```typescript
+const result = await prisma.$runCommandRaw({
+  ping: 1,
+})
+```
+
+## Connection string options
+
+MongoDB connection strings support various options:
+
+```
+mongodb+srv://user:pass@cluster.mongodb.net/db?retryWrites=true&w=majority&maxPoolSize=10
+```
+
+Common options:
+- `retryWrites=true` - Retry write operations on network errors
+- `w=majority` - Write concern for data durability
+- `maxPoolSize=10` - Maximum connection pool size
+- `minPoolSize=5` - Minimum connection pool size
+- `maxIdleTimeMS=60000` - Maximum idle time for connections
+
+## Limitations
+
+<Note>
+MongoDB in Prisma has some limitations compared to relational databases:
+
+- No support for referential actions (`onDelete`, `onUpdate`)
+- No support for scalar lists of enums
+- Limited support for filtering on relations
+- No support for `@@unique` on multiple fields containing relation fields
+</Note>
+
+## MongoDB Atlas
+
+For production deployments, MongoDB Atlas is recommended:
+
+1. Create a cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+2. Whitelist your IP address or use `0.0.0.0/0` for all IPs
+3. Create a database user with appropriate permissions
+4. Get your connection string from the Atlas dashboard
+5. Replace `<username>`, `<password>`, and `<dbname>` in the connection string
+
+## Best practices
+
+<Card title="Connection management" icon="plug">
+  Always call `$disconnect()` when your application shuts down to properly close connections.
+</Card>
+
+<Card title="Index optimization" icon="gauge">
+  Create indexes on frequently queried fields for better performance.
+</Card>
+
+<Card title="Schema design" icon="diagram-project">
+  Use embedded documents for one-to-many relationships when the child documents are always accessed with the parent.
+</Card>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Schema reference" icon="book" href="/api/schema-models">
+    Learn more about MongoDB-specific schema syntax
+  </Card>
+  <Card title="CRUD operations" icon="database" href="/client/crud-operations">
+    Explore MongoDB CRUD operations
+  </Card>
+</CardGroup>

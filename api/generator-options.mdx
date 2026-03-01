@@ -1,0 +1,539 @@
+---
+title: 'Generator Configuration'
+description: 'Configuration options for Prisma generators in prisma.config.ts'
+---
+
+## Overview
+
+While generator configuration is primarily defined in your Prisma schema files, the `prisma.config.ts` file influences how generators are executed and where their output is located.
+
+## Schema-Based Generator Configuration
+
+Generators are defined in your Prisma schema file (`.prisma`):
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+```
+
+## Configuration File Integration
+
+### Schema Location
+
+The `schema` configuration option determines where Prisma looks for generator definitions:
+
+```typescript
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  schema: './prisma/schema.prisma'
+})
+```
+
+### Multiple Schema Files
+
+When using multiple schema files, generators can be defined in any of the files:
+
+```typescript
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  schema: './prisma/schemas' // Directory containing multiple .prisma files
+})
+```
+
+**Example schema structure:**
+```
+prisma/schemas/
+├── schema.prisma        # Contains models
+└── generators.prisma    # Contains generator definitions
+```
+
+`generators.prisma`:
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+generator json {
+  provider = "prisma-json-types-generator"
+}
+```
+
+## Common Generator Configurations
+
+### Prisma Client (TypeScript)
+
+```prisma
+generator client {
+  provider = "prisma-client"
+}
+```
+
+With custom output:
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/client"
+}
+```
+
+### Prisma Client (JavaScript - Legacy)
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+```
+
+### Multiple Generators
+
+```prisma
+generator client {
+  provider = "prisma-client"
+}
+
+generator dbml {
+  provider = "prisma-dbml-generator"
+  output   = "../docs"
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../erd.svg"
+}
+```
+
+## Generator Options
+
+### provider
+
+Specifies which generator to use.
+
+<ParamField path="provider" type="string" required>
+  The generator provider. Can be:
+  - Built-in: `"prisma-client"`, `"prisma-client-js"`
+  - npm package: `"prisma-dbml-generator"`
+  - Local path: `"./my-generator"`
+
+  ```prisma
+  generator client {
+    provider = "prisma-client"
+  }
+  ```
+</ParamField>
+
+### output
+
+Defines where generated files are written.
+
+<ParamField path="output" type="string">
+  Path to the output directory. Can be absolute or relative to the schema file.
+
+  ```prisma
+  generator client {
+    provider = "prisma-client"
+    output   = "./generated/client"
+  }
+  ```
+
+  Default: `node_modules/.prisma/client`
+</ParamField>
+
+### previewFeatures
+
+Enables preview features for the generator.
+
+<ParamField path="previewFeatures" type="string[]">
+  Array of preview feature names to enable.
+
+  ```prisma
+  generator client {
+    provider        = "prisma-client"
+    previewFeatures = ["typedSql", "views"]
+  }
+  ```
+</ParamField>
+
+### binaryTargets
+
+Specifies which binary platforms to generate for.
+
+<ParamField path="binaryTargets" type="string[]">
+  List of platform identifiers for binary compilation targets.
+
+  ```prisma
+  generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "debian-openssl-3.0.x"]
+  }
+  ```
+
+  Common values:
+  - `"native"` - Current platform
+  - `"debian-openssl-3.0.x"`
+  - `"debian-openssl-1.1.x"`
+  - `"linux-musl-openssl-3.0.x"`
+  - `"rhel-openssl-3.0.x"`
+  - `"darwin"`, `"darwin-arm64"`
+  - `"windows"`
+</ParamField>
+
+<Note>
+The new `prisma-client` generator uses WebAssembly and doesn't require binary targets in most cases.
+</Note>
+
+### engineType
+
+Specifies the query engine type (legacy generator only).
+
+<ParamField path="engineType" type="'library' | 'binary'">
+  ```prisma
+  generator client {
+    provider   = "prisma-client-js"
+    engineType = "library"
+  }
+  ```
+
+  - `"library"` - Node-API library (default)
+  - `"binary"` - Standalone binary
+</ParamField>
+
+<Note>
+The new `prisma-client` generator uses WebAssembly and doesn't use this option.
+</Note>
+
+## Path Resolution
+
+### Relative Paths
+
+Generator output paths are resolved relative to the schema file location:
+
+```typescript
+// prisma.config.ts
+export default defineConfig({
+  schema: './prisma/schema.prisma'
+})
+```
+
+```prisma
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/client" // Resolves to ./generated/client
+}
+```
+
+### Absolute Paths
+
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "/absolute/path/to/client"
+}
+```
+
+## Running Generators
+
+### Generate Command
+
+Run all configured generators:
+
+```bash
+prisma generate
+```
+
+With custom config location:
+```bash
+prisma generate --config ./custom/prisma.config.ts
+```
+
+### Watch Mode
+
+```bash
+prisma generate --watch
+```
+
+### Specific Generator
+
+Generate only a specific generator:
+
+```bash
+prisma generate --generator client
+```
+
+## Custom Generators
+
+### Using npm Packages
+
+Install and configure third-party generators:
+
+```bash
+npm install prisma-dbml-generator
+```
+
+```prisma
+generator dbml {
+  provider = "prisma-dbml-generator"
+  output   = "../docs/dbml"
+}
+```
+
+### Local Generator
+
+```prisma
+generator custom {
+  provider = "node ./my-generator.js"
+  output   = "./generated"
+}
+```
+
+## Generator Registry
+
+Prisma 7 includes a generator registry for managing multiple generators. This is automatically handled by the CLI.
+
+### Configuration
+
+Generators are automatically registered when defined in your schema:
+
+```prisma
+generator client {
+  provider = "prisma-client"
+}
+
+generator types {
+  provider = "prisma-json-types-generator"
+}
+```
+
+Both generators will be executed when you run `prisma generate`.
+
+## Environment-Specific Configuration
+
+You can use environment variables in generator configuration:
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+const isProduction = env('NODE_ENV') === 'production'
+
+export default defineConfig({
+  schema: isProduction 
+    ? './prisma/schema.production.prisma'
+    : './prisma/schema.prisma'
+})
+```
+
+## TypedSQL Configuration
+
+Enable the TypedSQL preview feature:
+
+```prisma
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["typedSql"]
+}
+```
+
+Configure the TypedSQL directory in `prisma.config.ts`:
+
+```typescript
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  typedSql: {
+    path: './prisma/queries'
+  }
+})
+```
+
+Directory structure:
+```
+prisma/
+├── schema.prisma
+└── queries/
+    ├── getUserById.sql
+    └── searchUsers.sql
+```
+
+## Views Configuration
+
+Enable views preview feature:
+
+```prisma
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+}
+```
+
+Configure the views directory:
+
+```typescript
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  views: {
+    path: './prisma/views'
+  }
+})
+```
+
+Directory structure:
+```
+prisma/
+├── schema.prisma
+└── views/
+    ├── active_users.sql
+    └── user_statistics.sql
+```
+
+## Common Patterns
+
+### Monorepo Setup
+
+```typescript
+// apps/api/prisma.config.ts
+import { defineConfig } from '@prisma/config'
+import path from 'node:path'
+
+export default defineConfig({
+  schema: './prisma/schema.prisma'
+})
+```
+
+```prisma
+// apps/api/prisma/schema.prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../../packages/database/generated"
+}
+```
+
+### Separate Dev and Prod Schemas
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+const environment = env('NODE_ENV')
+
+export default defineConfig({
+  schema: `./prisma/schema.${environment}.prisma`
+})
+```
+
+### Multiple Database Projects
+
+```
+project/
+├── prisma-postgres.config.ts
+├── prisma-mysql.config.ts
+├── postgres/
+│   └── schema.prisma
+└── mysql/
+    └── schema.prisma
+```
+
+```bash
+prisma generate --config prisma-postgres.config.ts
+prisma generate --config prisma-mysql.config.ts
+```
+
+## Troubleshooting
+
+### Generator Not Found
+
+**Error:**
+```
+Generator "client" not found
+```
+
+**Solutions:**
+1. Verify the generator is defined in your schema file
+2. Check the schema path in `prisma.config.ts`
+3. Ensure the schema file has a `.prisma` extension
+
+### Output Path Errors
+
+**Error:**
+```
+Cannot write to output directory
+```
+
+**Solutions:**
+1. Check file permissions on the output directory
+2. Verify the output path is correct
+3. Ensure parent directories exist
+
+### Binary Target Issues
+
+**Error:**
+```
+Query engine binary not found for platform
+```
+
+**Solution:** Add the correct binary target:
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+```
+
+<Note>
+The new `prisma-client` generator uses WebAssembly and should not have binary target issues.
+</Note>
+
+## Best Practices
+
+### 1. Use Relative Paths
+
+```prisma
+// ✅ Good: Portable across environments
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/client"
+}
+
+// ❌ Bad: Hardcoded absolute path
+generator client {
+  provider = "prisma-client"
+  output   = "/Users/john/project/generated/client"
+}
+```
+
+### 2. Organize Generators in Separate File
+
+```
+prisma/
+├── models/
+│   ├── user.prisma
+│   └── post.prisma
+└── generators.prisma  # All generator configs here
+```
+
+### 3. Document Custom Generator Options
+
+```prisma
+// Generator for creating DBML documentation
+// Run with: prisma generate --generator dbml
+generator dbml {
+  provider = "prisma-dbml-generator"
+  output   = "../docs/database"
+}
+```
+
+### 4. Use Preview Features Explicitly
+
+```prisma
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["typedSql", "views"] // Explicit is better
+}
+```

@@ -1,0 +1,354 @@
+---
+title: 'prisma migrate'
+description: 'Create and apply database migrations with Prisma Migrate'
+---
+
+# prisma migrate
+
+Manage database migrations with Prisma Migrate.
+
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `prisma migrate dev` | Create migration from schema changes and apply to database |
+| `prisma migrate deploy` | Apply pending migrations in production |
+| `prisma migrate reset` | Reset database and re-apply all migrations |
+
+---
+
+## prisma migrate dev
+
+Create a migration from changes in Prisma schema, apply it to the database, and trigger generators (e.g., Prisma Client).
+
+### Usage
+
+```bash
+prisma migrate dev [options]
+```
+
+The datasource URL configuration is read from the Prisma config file (e.g., `prisma.config.ts`).
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma migrate dev --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma migrate dev --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma migrate dev --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Override the datasource URL from the Prisma config file.
+  
+  ```bash
+  prisma migrate dev --url="postgresql://user:password@localhost:5432/mydb"
+  ```
+</ParamField>
+
+<ParamField path="--name" type="string">
+  Name the migration (without prompting).
+  
+  **Alias:** `-n`
+  
+  ```bash
+  prisma migrate dev --name add_user_table
+  ```
+</ParamField>
+
+<ParamField path="--create-only" type="boolean">
+  Create a new migration but do not apply it. The migration will be empty if there are no changes in the Prisma schema.
+  
+  ```bash
+  prisma migrate dev --create-only
+  ```
+</ParamField>
+
+### Examples
+
+#### Basic usage
+
+Create and apply migration:
+
+```bash
+prisma migrate dev
+```
+
+**Interactive prompt:**
+```
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+✔ Enter a name for the new migration: › add_user_profile
+```
+
+**Output:**
+```
+The following migration(s) have been created and applied from new schema changes:
+
+migrations/
+  └─ 20240301120000_add_user_profile/
+    └─ migration.sql
+
+✔ Your database is now in sync with your schema.
+```
+
+#### Create migration without applying
+
+```bash
+prisma migrate dev --create-only
+```
+
+Creates a migration file without applying it to the database. You can edit the SQL before applying with another `prisma migrate dev` run.
+
+#### Name migration non-interactively
+
+```bash
+prisma migrate dev --name add_posts_table
+```
+
+#### Specify custom schema
+
+```bash
+prisma migrate dev --schema=./database/schema.prisma
+```
+
+### Migration Warnings
+
+If your migration might cause data loss, you'll see warnings:
+
+```
+⚠️  Warnings for the current datasource:
+
+  • You are about to drop the column `email` on the `User` table, which still contains 42 non-null values.
+
+Are you sure you want to create and apply this migration? › (y/N)
+```
+
+### Database Reset Needed
+
+In some cases, `migrate dev` may determine that the database needs to be reset:
+
+```
+We need to reset the PostgreSQL database "mydb" at "localhost:5432"
+
+You may use prisma migrate reset to drop the development database.
+All data will be lost.
+```
+
+---
+
+## prisma migrate deploy
+
+Apply pending migrations to update the database schema in production/staging.
+
+### Usage
+
+```bash
+prisma migrate deploy [options]
+```
+
+The datasource URL configuration is read from the Prisma config file (e.g., `prisma.config.ts`).
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma migrate deploy --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma migrate deploy --config=./prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma migrate deploy --schema=./schema.prisma
+  ```
+</ParamField>
+
+### Examples
+
+#### Deploy pending migrations
+
+```bash
+prisma migrate deploy
+```
+
+**Output:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "production_db" at "db.example.com:5432"
+
+3 migrations found in prisma/migrations
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20240301120000_add_user_profile/
+    └─ migration.sql
+  └─ 20240301130000_add_posts/
+    └─ migration.sql
+
+✔ All migrations have been successfully applied.
+```
+
+#### No pending migrations
+
+```bash
+prisma migrate deploy
+```
+
+**Output:**
+```
+2 migrations found in prisma/migrations
+
+✔ No pending migrations to apply.
+```
+
+### Production Usage
+
+Use `migrate deploy` in production environments as part of your deployment pipeline:
+
+```bash
+# In your CI/CD pipeline
+npm install
+npm run build
+prisma migrate deploy
+npm start
+```
+
+---
+
+## prisma migrate reset
+
+Reset your database and apply all migrations. **All data will be lost.**
+
+### Usage
+
+```bash
+prisma migrate reset [options]
+```
+
+The datasource URL configuration is read from the Prisma config file (e.g., `prisma.config.ts`).
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma migrate reset --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma migrate reset --config=./prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma migrate reset --schema=./schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Skip the confirmation prompt.
+  
+  **Alias:** `-f`
+  
+  ```bash
+  prisma migrate reset --force
+  ```
+</ParamField>
+
+### Examples
+
+#### Reset with confirmation
+
+```bash
+prisma migrate reset
+```
+
+**Interactive prompt:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "dev_db" at "localhost:5432"
+
+Are you sure you want to reset your database? All data will be lost. › (y/N)
+```
+
+**Output after confirmation:**
+```
+✔ Database reset successful
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20240301120000_init/
+    └─ migration.sql
+  └─ 20240301130000_add_users/
+    └─ migration.sql
+```
+
+#### Reset without confirmation
+
+```bash
+prisma migrate reset --force
+```
+
+Skips the confirmation prompt. Useful in scripts and CI/CD pipelines for test databases.
+
+### When to Use Reset
+
+- During development when you want to start fresh
+- When testing migration scripts
+- When your migration history is broken
+- Before running integration tests in CI
+
+⚠️ **Warning:** Never use `migrate reset` in production. It will delete all data.
+
+## Related Commands
+
+- [`prisma db push`](/api/prisma-db) - Push schema changes without migrations
+- [`prisma db pull`](/api/prisma-db) - Introspect database to update schema
+- [`prisma generate`](/api/prisma-generate) - Generate Prisma Client

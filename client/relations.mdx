@@ -1,0 +1,523 @@
+---
+title: Working with Relations
+description: Load and manipulate related data using include and select
+---
+
+# Working with Relations
+
+Prisma Client makes it easy to work with related data through the `include` and `select` options.
+
+## Including Relations
+
+The `include` option loads related records alongside the main record:
+
+### Basic Include
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: {
+    posts: true,
+    profile: true
+  }
+})
+
+// Result includes user fields + posts array + profile object
+```
+
+### Nested Includes
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: {
+    posts: {
+      include: {
+        comments: {
+          include: {
+            author: true
+          }
+        }
+      }
+    }
+  }
+})
+```
+
+### Filtering Included Relations
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: {
+    posts: {
+      where: {
+        published: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 10
+    }
+  }
+})
+```
+
+## Selecting Fields
+
+The `select` option chooses specific fields to return:
+
+### Basic Select
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    id: true,
+    email: true,
+    name: true
+    // password excluded
+  }
+})
+```
+
+### Select with Relations
+
+Use `select` to include specific fields from relations:
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    id: true,
+    email: true,
+    posts: {
+      select: {
+        id: true,
+        title: true,
+        published: true
+      }
+    }
+  }
+})
+```
+
+### Select vs Include
+
+**Key difference:**
+- `include`: Returns **all** model fields + specified relations
+- `select`: Returns **only** specified fields (must explicitly include each)
+
+```typescript
+// Include: Returns all user fields + posts
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: { posts: true }
+})
+// { id, email, name, createdAt, ..., posts: [...] }
+
+// Select: Returns only id, email, and posts
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    id: true,
+    email: true,
+    posts: true
+  }
+})
+// { id, email, posts: [...] }
+```
+
+**Cannot mix `select` and `include` at the same level:**
+
+```typescript
+// ❌ Error
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  select: { id: true },
+  include: { posts: true }  // Error!
+})
+
+// ✓ OK: Use select for both
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    id: true,
+    posts: true  // Relations work in select
+  }
+})
+```
+
+## Relation Types
+
+### One-to-Many
+
+```prisma
+model User {
+  id    String @id
+  posts Post[]
+}
+
+model Post {
+  id       String @id
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+}
+```
+
+```typescript
+// Load user with all posts
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: { posts: true }
+})
+
+// Load post with author
+const post = await prisma.post.findUnique({
+  where: { id: '456' },
+  include: { author: true }
+})
+```
+
+### One-to-One
+
+```prisma
+model User {
+  id      String   @id
+  profile Profile?
+}
+
+model Profile {
+  id     String @id
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique
+}
+```
+
+```typescript
+// Load user with profile
+const user = await prisma.user.findUnique({
+  where: { id: '123' },
+  include: { profile: true }
+})
+
+// Load profile with user
+const profile = await prisma.profile.findUnique({
+  where: { id: '789' },
+  include: { user: true }
+})
+```
+
+### Many-to-Many
+
+```prisma
+model Post {
+  id         String     @id
+  categories Category[]
+}
+
+model Category {
+  id    String @id
+  posts Post[]
+}
+```
+
+```typescript
+// Load post with categories
+const post = await prisma.post.findUnique({
+  where: { id: '123' },
+  include: { categories: true }
+})
+
+// Load category with posts
+const category = await prisma.category.findUnique({
+  where: { id: '456' },
+  include: { posts: true }
+})
+```
+
+## Fluent API
+
+The fluent API allows traversing relations through method chaining:
+
+```typescript
+// Get all posts by a specific user
+const posts = await prisma.user
+  .findUnique({ where: { email: 'alice@example.com' } })
+  .posts()
+
+// Get user of a specific post
+const author = await prisma.post
+  .findUnique({ where: { id: '123' } })
+  .author()
+
+// Chain multiple relations
+const comments = await prisma.user
+  .findUnique({ where: { id: '123' } })
+  .posts({ where: { published: true } })
+```
+
+**Fluent API with filters:**
+
+```typescript
+const publishedPosts = await prisma.user
+  .findUnique({ where: { id: '123' } })
+  .posts({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' },
+    take: 10
+  })
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/model/applyFluent.ts`
+
+## Nested Writes
+
+### Create with Relations
+
+```typescript
+// Create user with posts
+const user = await prisma.user.create({
+  data: {
+    email: 'alice@example.com',
+    posts: {
+      create: [
+        { title: 'First Post', published: true },
+        { title: 'Second Post', published: false }
+      ]
+    }
+  },
+  include: { posts: true }
+})
+
+// Create post with author
+const post = await prisma.post.create({
+  data: {
+    title: 'My Post',
+    author: {
+      connect: { email: 'alice@example.com' }  // Link to existing user
+    }
+  }
+})
+
+// Create post with new author
+const post = await prisma.post.create({
+  data: {
+    title: 'My Post',
+    author: {
+      create: { email: 'bob@example.com' }  // Create new user
+    }
+  }
+})
+```
+
+### Update with Relations
+
+```typescript
+// Update user and their posts
+const user = await prisma.user.update({
+  where: { id: '123' },
+  data: {
+    posts: {
+      create: { title: 'New Post' },
+      update: {
+        where: { id: '456' },
+        data: { published: true }
+      },
+      delete: { id: '789' },
+      updateMany: {
+        where: { published: false },
+        data: { published: true }
+      },
+      deleteMany: {
+        where: { views: { lt: 10 } }
+      }
+    }
+  }
+})
+```
+
+### Connect and Disconnect
+
+```typescript
+// Connect existing records (many-to-many)
+const post = await prisma.post.update({
+  where: { id: '123' },
+  data: {
+    categories: {
+      connect: [
+        { id: 'cat1' },
+        { id: 'cat2' }
+      ]
+    }
+  }
+})
+
+// Disconnect
+const post = await prisma.post.update({
+  where: { id: '123' },
+  data: {
+    categories: {
+      disconnect: [
+        { id: 'cat1' }
+      ]
+    }
+  }
+})
+
+// Set (replace all)
+const post = await prisma.post.update({
+  where: { id: '123' },
+  data: {
+    categories: {
+      set: [
+        { id: 'cat3' },
+        { id: 'cat4' }
+      ]
+    }
+  }
+})
+```
+
+## Relation Count
+
+Get the count of related records without loading them:
+
+```typescript
+const users = await prisma.user.findMany({
+  include: {
+    _count: {
+      select: {
+        posts: true,
+        comments: true
+      }
+    }
+  }
+})
+
+// Result:
+// [
+//   { id: '1', email: '...', _count: { posts: 5, comments: 12 } },
+//   { id: '2', email: '...', _count: { posts: 2, comments: 8 } }
+// ]
+```
+
+**Filter the count:**
+
+```typescript
+const users = await prisma.user.findMany({
+  include: {
+    _count: {
+      select: {
+        posts: { where: { published: true } }
+      }
+    }
+  }
+})
+```
+
+## Relation Filters
+
+Filter parent records based on related data:
+
+```typescript
+// Users with at least one published post
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {
+        published: true
+      }
+    }
+  }
+})
+
+// Users with NO posts
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      none: {}
+    }
+  }
+})
+
+// Users where ALL posts are published
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      every: {
+        published: true
+      }
+    }
+  }
+})
+```
+
+See [Queries](/client/queries) for more relation filter examples.
+
+## Relation Loading Performance
+
+### N+1 Problem
+
+```typescript
+// ❌ Bad: N+1 queries
+const users = await prisma.user.findMany()
+for (const user of users) {
+  const posts = await prisma.post.findMany({
+    where: { authorId: user.id }
+  })
+}
+
+// ✓ Good: Single query with include
+const users = await prisma.user.findMany({
+  include: { posts: true }
+})
+```
+
+### Select Only What You Need
+
+```typescript
+// ❌ Bad: Loads all fields
+const users = await prisma.user.findMany({
+  include: { posts: true }
+})
+
+// ✓ Good: Select specific fields
+const users = await prisma.user.findMany({
+  select: {
+    id: true,
+    email: true,
+    posts: {
+      select: {
+        id: true,
+        title: true
+      }
+    }
+  }
+})
+```
+
+### Limit Related Records
+
+```typescript
+// Load only recent posts
+const users = await prisma.user.findMany({
+  include: {
+    posts: {
+      take: 5,
+      orderBy: { createdAt: 'desc' }
+    }
+  }
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filtering & Sorting" icon="filter" href="/client/filtering-sorting">
+    Advanced where clauses and orderBy
+  </Card>
+  <Card title="Aggregations" icon="chart-simple" href="/client/aggregations">
+    Count and aggregate related data
+  </Card>
+</CardGroup>

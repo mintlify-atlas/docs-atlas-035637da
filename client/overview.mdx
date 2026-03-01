@@ -1,0 +1,193 @@
+---
+title: Prisma Client Overview
+description: Comprehensive guide to Prisma Client - a type-safe database client for TypeScript and Node.js
+---
+
+# Prisma Client Overview
+
+Prisma Client is a type-safe database client that's auto-generated based on your Prisma schema. It provides a fluent API for querying your database with full TypeScript support and autocomplete.
+
+## Key Features
+
+Prisma Client offers powerful capabilities for working with your database:
+
+- **Type Safety**: Fully typed queries based on your schema
+- **Auto-completion**: IntelliSense support in your editor
+- **Relation Loading**: Easy to use `include` and `select` for nested data
+- **Transactions**: Both interactive and batch transaction support
+- **Middleware**: Hook into the query execution pipeline
+- **Extensions**: Extend client functionality with custom logic
+- **Raw SQL**: Execute raw queries when needed
+- **Connection Pooling**: Efficient connection management
+
+## Architecture (Prisma 7)
+
+Prisma Client in version 7 uses a modern architecture:
+
+```
+PrismaClient → ClientEngine → Query Compiler (Wasm) → Executor → Driver Adapter → Database
+```
+
+### Core Components
+
+<ParamField path="ClientEngine" type="class">
+  Orchestrates query execution using WebAssembly query compiler. Located in `packages/client/src/runtime/core/engines/client/`.
+</ParamField>
+
+<ParamField path="QueryInterpreter" type="class">
+  Executes query plans against the database through driver adapters. Defined in `packages/client-engine-runtime/src/interpreter/query-interpreter.ts`.
+</ParamField>
+
+<ParamField path="Driver Adapters" type="interface">
+  JavaScript-based database drivers that connect to your database. Supports PostgreSQL, MySQL, SQLite, SQL Server via adapters like `@prisma/adapter-pg`, `@prisma/adapter-neon`, etc.
+</ParamField>
+
+## Query Execution Flow
+
+When you execute a Prisma Client query:
+
+1. **Request Creation**: Your query is converted to an internal request object
+2. **Middleware Pipeline**: Request passes through registered middleware
+3. **Query Extensions**: Client extensions modify the query if applicable
+4. **Serialization**: Query is serialized to JSON protocol format
+5. **Query Compilation**: WebAssembly compiler generates a query plan
+6. **Execution**: Executor runs the plan through the driver adapter
+7. **Result Extensions**: Results are transformed by result extensions
+8. **Response**: Typed result is returned to your code
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:892-968`
+
+## Available Operations
+
+Prisma Client provides operations for each model in your schema:
+
+### CRUD Operations
+
+- `findUnique()` - Find a single record by unique field
+- `findUniqueOrThrow()` - Find or throw error
+- `findFirst()` - Find first matching record
+- `findFirstOrThrow()` - Find first or throw
+- `findMany()` - Find multiple records
+- `create()` - Create a new record
+- `createMany()` - Create multiple records
+- `update()` - Update a record
+- `updateMany()` - Update multiple records
+- `upsert()` - Update or create
+- `delete()` - Delete a record
+- `deleteMany()` - Delete multiple records
+
+### Aggregation Operations
+
+- `count()` - Count records
+- `aggregate()` - Perform aggregations (sum, avg, min, max, count)
+- `groupBy()` - Group and aggregate
+
+### Raw Operations
+
+- `$queryRaw()` - Execute raw SQL SELECT queries
+- `$executeRaw()` - Execute raw SQL modifications
+- `$queryRawUnsafe()` - Unsafe variant with string interpolation
+- `$executeRawUnsafe()` - Unsafe execute variant
+- `$runCommandRaw()` - MongoDB-specific commands
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/model/applyModel.ts:20-34`
+
+## Client Methods
+
+Beyond model operations, PrismaClient provides utility methods:
+
+### Connection Management
+
+<ParamField path="$connect()" type="method">
+  Explicitly connect to the database. Usually not needed as Prisma Client connects automatically.
+  
+  ```typescript
+  await prisma.$connect()
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:494-500`
+</ParamField>
+
+<ParamField path="$disconnect()" type="method">
+  Disconnect from the database and release resources.
+  
+  ```typescript
+  await prisma.$disconnect()
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:506-519`
+</ParamField>
+
+### Transactions
+
+<ParamField path="$transaction()" type="method">
+  Execute operations in a transaction. Supports both batch and interactive transactions.
+  
+  ```typescript
+  // Batch transaction
+  await prisma.$transaction([
+    prisma.user.create({ data: { email: 'user@example.com' } }),
+    prisma.post.create({ data: { title: 'Hello' } })
+  ])
+  
+  // Interactive transaction
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({ data: { email: 'user@example.com' } })
+    await tx.post.create({ data: { title: 'Hello', authorId: user.id } })
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:853-885`
+</ParamField>
+
+### Events
+
+<ParamField path="$on()" type="method">
+  Listen to client events like queries, errors, and lifecycle events.
+  
+  ```typescript
+  prisma.$on('query', (e) => {
+    console.log('Query:', e.query)
+    console.log('Duration:', e.duration, 'ms')
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:485-492`
+</ParamField>
+
+### Extensions
+
+<ParamField path="$extends()" type="method">
+  Extend the Prisma Client with custom functionality.
+  
+  ```typescript
+  const extendedClient = prisma.$extends({
+    model: {
+      user: {
+        async findByEmail(email: string) {
+          return this.findUnique({ where: { email } })
+        }
+      }
+    }
+  })
+  ```
+  
+  Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/extensions/$extends.ts:8-20`
+</ParamField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup" icon="gear" href="/client/setup">
+    Learn how to set up Prisma Client with driver adapters
+  </Card>
+  <Card title="CRUD Operations" icon="database" href="/client/crud-operations">
+    Master create, read, update, and delete operations
+  </Card>
+  <Card title="Queries" icon="magnifying-glass" href="/client/queries">
+    Explore query patterns and filtering options
+  </Card>
+  <Card title="Transactions" icon="arrows-rotate" href="/client/transactions">
+    Work with transactions for data consistency
+  </Card>
+</CardGroup>

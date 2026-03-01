@@ -1,0 +1,589 @@
+---
+title: Query Patterns
+description: Advanced query patterns and options in Prisma Client
+---
+
+# Query Patterns
+
+Prisma Client supports powerful query patterns for filtering, sorting, and paginating your data.
+
+## Basic Queries
+
+### Simple Filters
+
+```typescript
+// Exact match
+const users = await prisma.user.findMany({
+  where: {
+    email: 'alice@example.com'
+  }
+})
+
+// Multiple conditions (AND)
+const users = await prisma.user.findMany({
+  where: {
+    email: 'alice@example.com',
+    name: 'Alice'
+  }
+})
+```
+
+### Combining Conditions
+
+```typescript
+// OR
+const users = await prisma.user.findMany({
+  where: {
+    OR: [
+      { email: 'alice@example.com' },
+      { email: 'bob@example.com' }
+    ]
+  }
+})
+
+// AND
+const users = await prisma.user.findMany({
+  where: {
+    AND: [
+      { age: { gte: 18 } },
+      { verified: true }
+    ]
+  }
+})
+
+// NOT
+const users = await prisma.user.findMany({
+  where: {
+    NOT: {
+      email: { contains: 'spam' }
+    }
+  }
+})
+
+// Complex combinations
+const users = await prisma.user.findMany({
+  where: {
+    OR: [
+      { age: { gte: 65 } },
+      {
+        AND: [
+          { age: { lte: 18 } },
+          { verified: true }
+        ]
+      }
+    ]
+  }
+})
+```
+
+## Field Filters
+
+### String Filters
+
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    email: {
+      equals: 'alice@example.com',      // Exact match
+      not: 'bob@example.com',            // Not equal
+      in: ['a@ex.com', 'b@ex.com'],      // In array
+      notIn: ['spam@ex.com'],            // Not in array
+      lt: 'n',                           // Less than (alphabetically)
+      lte: 'n',                          // Less than or equal
+      gt: 'm',                           // Greater than
+      gte: 'm',                          // Greater than or equal
+      contains: '@example.com',          // Contains substring
+      startsWith: 'alice',               // Starts with
+      endsWith: '@example.com',          // Ends with
+      mode: 'insensitive'                // Case-insensitive (PostgreSQL)
+    }
+  }
+})
+```
+
+### Numeric Filters
+
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    age: {
+      equals: 25,                        // Exact match
+      not: 18,                           // Not equal
+      in: [18, 21, 25],                  // In array
+      notIn: [13, 14, 15],               // Not in array
+      lt: 18,                            // Less than
+      lte: 18,                           // Less than or equal
+      gt: 65,                            // Greater than
+      gte: 65                            // Greater than or equal
+    }
+  }
+})
+```
+
+### Date Filters
+
+```typescript
+const posts = await prisma.post.findMany({
+  where: {
+    createdAt: {
+      equals: new Date('2024-01-01'),
+      lt: new Date('2024-12-31'),
+      gte: new Date('2024-01-01')
+    }
+  }
+})
+
+// Last 7 days
+const recentPosts = await prisma.post.findMany({
+  where: {
+    createdAt: {
+      gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    }
+  }
+})
+```
+
+### Boolean Filters
+
+```typescript
+const posts = await prisma.post.findMany({
+  where: {
+    published: true,
+    // Or
+    published: { equals: true },
+    published: { not: false }
+  }
+})
+```
+
+### Null Filters
+
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    name: null,              // name IS NULL
+    // Or
+    name: { equals: null },  // name IS NULL
+    // Not null
+    name: { not: null }      // name IS NOT NULL
+  }
+})
+
+// Check for presence
+const users = await prisma.user.findMany({
+  where: {
+    name: { isSet: true }   // Has a value (not null)
+  }
+})
+```
+
+## Relation Filters
+
+### Filter by Relation Existence
+
+```typescript
+// Users with at least one post
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {}
+    }
+  }
+})
+
+// Users with no posts
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      none: {}
+    }
+  }
+})
+
+// Users where all posts are published
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      every: {
+        published: true
+      }
+    }
+  }
+})
+```
+
+### Filter by Relation Fields
+
+```typescript
+// Users with published posts
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {
+        published: true,
+        views: { gte: 100 }
+      }
+    }
+  }
+})
+
+// Posts by specific author
+const posts = await prisma.post.findMany({
+  where: {
+    author: {
+      email: 'alice@example.com'
+    }
+  }
+})
+
+// Posts by authors from specific domain
+const posts = await prisma.post.findMany({
+  where: {
+    author: {
+      email: { endsWith: '@example.com' }
+    }
+  }
+})
+```
+
+### Nested Relation Filters
+
+```typescript
+// Users who have posts with comments from specific user
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {
+        comments: {
+          some: {
+            author: {
+              email: 'commenter@example.com'
+            }
+          }
+        }
+      }
+    }
+  }
+})
+```
+
+## Sorting
+
+### Simple Sorting
+
+```typescript
+// Single field
+const users = await prisma.user.findMany({
+  orderBy: {
+    createdAt: 'desc'
+  }
+})
+
+// Multiple fields
+const users = await prisma.user.findMany({
+  orderBy: [
+    { age: 'desc' },
+    { name: 'asc' }
+  ]
+})
+```
+
+### Sort by Relation
+
+```typescript
+// Sort users by post count
+const users = await prisma.user.findMany({
+  orderBy: {
+    posts: {
+      _count: 'desc'
+    }
+  }
+})
+
+// Sort posts by author name
+const posts = await prisma.post.findMany({
+  orderBy: {
+    author: {
+      name: 'asc'
+    }
+  }
+})
+```
+
+### Sort by Aggregation
+
+```typescript
+// Sort users by average post views
+const users = await prisma.user.findMany({
+  orderBy: {
+    posts: {
+      _avg: {
+        views: 'desc'
+      }
+    }
+  }
+})
+```
+
+## Pagination
+
+### Offset Pagination
+
+```typescript
+const page = 2
+const pageSize = 10
+
+const users = await prisma.user.findMany({
+  skip: (page - 1) * pageSize,
+  take: pageSize,
+  orderBy: { createdAt: 'desc' }
+})
+```
+
+### Cursor-Based Pagination
+
+```typescript
+// First page
+const firstPage = await prisma.user.findMany({
+  take: 10,
+  orderBy: { id: 'asc' }
+})
+
+// Next page
+const lastUser = firstPage[firstPage.length - 1]
+const nextPage = await prisma.user.findMany({
+  take: 10,
+  skip: 1,  // Skip the cursor
+  cursor: {
+    id: lastUser.id
+  },
+  orderBy: { id: 'asc' }
+})
+
+// Previous page
+const firstUser = firstPage[0]
+const prevPage = await prisma.user.findMany({
+  take: -10,  // Negative take for reverse
+  skip: 1,
+  cursor: {
+    id: firstUser.id
+  },
+  orderBy: { id: 'asc' }
+})
+```
+
+### Get Total Count
+
+```typescript
+const [users, total] = await prisma.$transaction([
+  prisma.user.findMany({
+    skip: 0,
+    take: 10
+  }),
+  prisma.user.count()
+])
+
+console.log(`Showing ${users.length} of ${total} users`)
+```
+
+## Distinct
+
+Get unique records based on specific fields:
+
+```typescript
+const uniqueEmails = await prisma.user.findMany({
+  distinct: ['email']
+})
+
+// Multiple fields
+const uniqueUsers = await prisma.user.findMany({
+  distinct: ['email', 'name']
+})
+```
+
+## Case Sensitivity
+
+PostgreSQL supports case-insensitive filtering:
+
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    email: {
+      equals: 'ALICE@EXAMPLE.COM',
+      mode: 'insensitive'
+    }
+  }
+})
+
+// Also works with contains, startsWith, endsWith
+const users = await prisma.user.findMany({
+  where: {
+    name: {
+      contains: 'alice',
+      mode: 'insensitive'
+    }
+  }
+})
+```
+
+**Note:** Case-insensitive filtering is provider-specific. MySQL and SQL Server are case-insensitive by default depending on collation.
+
+## JSON Filters
+
+Query JSON fields:
+
+```typescript
+// Exact match
+const users = await prisma.user.findMany({
+  where: {
+    metadata: {
+      equals: { theme: 'dark' }
+    }
+  }
+})
+
+// Path-based filtering
+const users = await prisma.user.findMany({
+  where: {
+    metadata: {
+      path: ['settings', 'theme'],
+      equals: 'dark'
+    }
+  }
+})
+
+// String contains in JSON
+const users = await prisma.user.findMany({
+  where: {
+    metadata: {
+      path: ['settings', 'theme'],
+      string_contains: 'dark'
+    }
+  }
+})
+```
+
+## Full-Text Search
+
+PostgreSQL and MySQL support full-text search:
+
+```typescript
+// PostgreSQL
+const posts = await prisma.post.findMany({
+  where: {
+    content: {
+      search: 'cat & dog'
+    }
+  }
+})
+
+// MySQL
+const posts = await prisma.post.findMany({
+  where: {
+    OR: [
+      { title: { search: 'prisma' } },
+      { content: { search: 'prisma' } }
+    ]
+  }
+})
+```
+
+## Scalar Lists
+
+Filter by array fields (PostgreSQL, CockroachDB, MongoDB):
+
+```typescript
+// Has value
+const users = await prisma.user.findMany({
+  where: {
+    tags: {
+      has: 'premium'
+    }
+  }
+})
+
+// Has some values
+const users = await prisma.user.findMany({
+  where: {
+    tags: {
+      hasSome: ['premium', 'verified']
+    }
+  }
+})
+
+// Has all values
+const users = await prisma.user.findMany({
+  where: {
+    tags: {
+      hasEvery: ['premium', 'verified']
+    }
+  }
+})
+
+// Is empty
+const users = await prisma.user.findMany({
+  where: {
+    tags: {
+      isEmpty: true
+    }
+  }
+})
+```
+
+## Query Optimization
+
+### Select Only What You Need
+
+```typescript
+// Bad: Fetches all fields
+const users = await prisma.user.findMany()
+
+// Good: Only needed fields
+const users = await prisma.user.findMany({
+  select: {
+    id: true,
+    email: true
+  }
+})
+```
+
+### Use Pagination
+
+```typescript
+// Bad: Loads all records
+const users = await prisma.user.findMany()
+
+// Good: Paginated
+const users = await prisma.user.findMany({
+  take: 100,
+  skip: 0
+})
+```
+
+### Index Your Filters
+
+Ensure database indexes exist for commonly filtered fields:
+
+```prisma
+model User {
+  id    String @id
+  email String @unique  // Automatically indexed
+  name  String
+  
+  @@index([name])  // Add index for better performance
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Relations" icon="link" href="/client/relations">
+    Load and filter related data
+  </Card>
+  <Card title="Filtering & Sorting" icon="filter" href="/client/filtering-sorting">
+    Deep dive into where clauses and orderBy
+  </Card>
+  <Card title="Aggregations" icon="chart-simple" href="/client/aggregations">
+    Count, sum, and aggregate data
+  </Card>
+</CardGroup>

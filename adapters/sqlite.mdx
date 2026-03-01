@@ -1,0 +1,375 @@
+---
+title: SQLite Driver Adapters
+description: Use JavaScript drivers for SQLite with Prisma ORM
+---
+
+# SQLite Driver Adapters
+
+Prisma ORM provides two driver adapters for SQLite databases, each optimized for different use cases.
+
+## better-sqlite3 Adapter
+
+The `@prisma/adapter-better-sqlite3` package enables usage of the [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) driver, a fast synchronous SQLite driver for Node.js.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-better-sqlite3
+npm install better-sqlite3
+```
+
+### Usage
+
+```typescript
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaBetterSqlite3({
+  url: './dev.db',
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Constructor Options
+
+The adapter accepts `better-sqlite3` configuration options:
+
+```typescript
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+
+const adapter = new PrismaBetterSqlite3(
+  {
+    url: './dev.db',              // Database file path
+    readonly: false,              // Open in read-only mode
+    fileMustExist: false,         // Throw error if file doesn't exist
+    timeout: 5000,                // Busy timeout in milliseconds
+    verbose: console.log,         // Logging function for SQL
+  },
+  {
+    shadowDatabaseUrl: ':memory:',         // Shadow database for migrations
+    timestampFormat: 'iso8601',            // 'iso8601' or 'unixepoch-ms'
+  }
+)
+```
+
+### Database URL Formats
+
+```typescript
+// Relative path
+url: './dev.db'
+url: 'file:./dev.db'
+
+// Absolute path
+url: '/absolute/path/to/dev.db'
+url: 'file:/absolute/path/to/dev.db'
+
+// In-memory database
+url: ':memory:'
+url: 'file::memory:'
+```
+
+### Adapter Options
+
+```typescript
+type PrismaBetterSqlite3Options = {
+  shadowDatabaseUrl?: string              // Shadow database for migrations
+  timestampFormat?: 'iso8601' | 'unixepoch-ms'  // How to store timestamps
+}
+```
+
+### Timestamp Handling
+
+Choose how `DateTime` fields are stored:
+
+```typescript
+// ISO 8601 format (default) - stored as TEXT
+const adapter = new PrismaBetterSqlite3(
+  { url: './dev.db' },
+  { timestampFormat: 'iso8601' }  // "2024-03-01T12:00:00.000Z"
+)
+
+// Unix epoch milliseconds - stored as INTEGER
+const adapter = new PrismaBetterSqlite3(
+  { url: './dev.db' },
+  { timestampFormat: 'unixepoch-ms' }  // 1709294400000
+)
+```
+
+### Transaction Support
+
+The adapter uses a mutex to ensure SQLite's single-writer constraint:
+
+```typescript
+// Interactive transactions
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' }
+  })
+  
+  const post = await tx.post.create({
+    data: { title: 'Hello', authorId: user.id }
+  })
+  
+  return { user, post }
+})
+```
+
+### Isolation Levels
+
+SQLite only supports `SERIALIZABLE` isolation level (default behavior):
+
+```typescript
+const result = await prisma.$transaction(
+  async (tx) => {
+    // Your queries
+  },
+  {
+    isolationLevel: 'SERIALIZABLE'  // Only valid option for SQLite
+  }
+)
+```
+
+### Savepoints
+
+The adapter supports nested transactions using savepoints:
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  await tx.user.create({ data: { email: 'user1@example.com' } })
+  
+  try {
+    await tx.$transaction(async (nestedTx) => {
+      await nestedTx.user.create({ data: { email: 'user2@example.com' } })
+      throw new Error('Rollback nested')
+    })
+  } catch (error) {
+    // Nested transaction rolled back
+  }
+  
+  // Parent transaction continues
+})
+```
+
+### Migration Support
+
+The adapter supports migrations with shadow database:
+
+```typescript
+const adapter = new PrismaBetterSqlite3(
+  { url: './dev.db' },
+  { shadowDatabaseUrl: ':memory:' }  // Use in-memory for shadow DB
+)
+```
+
+### Features
+
+- Synchronous API (wrapped in Promises for adapter interface)
+- Excellent performance
+- Full transaction support with mutex-based concurrency control
+- Savepoint support for nested transactions
+- Migration support with shadow database
+- Configurable timestamp formats
+
+---
+
+## libSQL / Turso Adapter
+
+The `@prisma/adapter-libsql` package enables usage of the [@libsql/client](https://github.com/tursodatabase/libsql-client-ts) driver for [Turso](https://turso.tech) and libSQL databases.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-libsql
+npm install @libsql/client
+```
+
+### Usage - Node.js Runtime
+
+```typescript
+import { PrismaLibSql } from '@prisma/adapter-libsql'
+import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaLibSql({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Usage - Web Runtime
+
+For constrained environments (edge runtimes, browsers):
+
+```typescript
+import { PrismaLibSql } from '@prisma/adapter-libsql/web'
+import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaLibSql({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Configuration Options
+
+The adapter accepts libSQL client configuration:
+
+```typescript
+import { PrismaLibSql } from '@prisma/adapter-libsql'
+
+// Remote database (Turso)
+const adapter = new PrismaLibSql({
+  url: 'libsql://[databaseName]-[organizationName].turso.io',
+  authToken: 'your-turso-auth-token',
+})
+
+// Local file
+const adapter = new PrismaLibSql({
+  url: 'file:./local.db',
+})
+
+// In-memory
+const adapter = new PrismaLibSql({
+  url: ':memory:',
+})
+
+// Local replica with sync
+const adapter = new PrismaLibSql({
+  url: 'file:./replica.db',
+  syncUrl: 'libsql://[databaseName]-[organizationName].turso.io',
+  authToken: 'your-turso-auth-token',
+  syncInterval: 60,  // Sync every 60 seconds
+})
+```
+
+### Remote Replicas
+
+Turso supports [remote replicas](https://docs.turso.tech/concepts#replica) for improved read performance:
+
+```typescript
+import { PrismaLibSql } from '@prisma/adapter-libsql'
+
+const adapter = new PrismaLibSql({
+  url: 'file:./replica.db',           // Local replica file
+  syncUrl: process.env.TURSO_DATABASE_URL,  // Primary database
+  authToken: process.env.TURSO_AUTH_TOKEN,
+})
+
+const prisma = new PrismaClient({ adapter })
+
+// Sync replica (if configured with syncUrl)
+if (adapter.underlyingClient().sync) {
+  await adapter.underlyingClient().sync()
+}
+```
+
+### Embedded Replicas
+
+[Embedded replicas](https://blog.turso.tech/introducing-embedded-replicas-deploy-turso-anywhere-2085aa0dc242) combine local SQLite with automatic synchronization:
+
+```typescript
+const adapter = new PrismaLibSql({
+  url: 'file:./embedded-replica.db',
+  syncUrl: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+  syncInterval: 60,  // Auto-sync every 60 seconds
+})
+```
+
+### Connection String Formats
+
+```typescript
+// Turso hosted database
+url: 'libsql://my-db-my-org.turso.io'
+
+// Local file
+url: 'file:./local.db'
+url: 'file:/absolute/path/to/db.sqlite'
+
+// In-memory
+url: ':memory:'
+```
+
+### Transaction Support
+
+The adapter supports transactions with automatic mutex handling:
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' }
+  })
+  
+  return user
+})
+```
+
+### Features
+
+- Remote database access over HTTP
+- Local file and in-memory modes
+- Embedded replicas with automatic sync
+- Edge runtime support (Cloudflare Workers, Vercel Edge, etc.)
+- Full transaction support
+- Savepoints for nested transactions
+
+### Schema Migrations with Turso
+
+Turso uses a different migration workflow. See the [Turso documentation](https://www.prisma.io/docs/guides/database/turso#how-to-manage-schema-changes) for details on:
+
+1. Generating migrations with Prisma Migrate
+2. Applying migrations using Turso CLI
+3. Managing schema changes in production
+
+---
+
+## Comparison
+
+| Feature | better-sqlite3 | libSQL/Turso |
+|---------|----------------|---------------|
+| **Runtime** | Node.js only | Node.js, Edge, Browser |
+| **Database Location** | Local file only | Local, Remote, Replicas |
+| **Performance** | Fastest (synchronous) | Fast (async, HTTP) |
+| **Transactions** | Yes | Yes |
+| **Savepoints** | Yes | Yes |
+| **Edge Runtime** | No | Yes |
+| **Remote Database** | No | Yes |
+| **Best For** | Node.js apps, maximum performance | Serverless, edge, distributed apps |
+
+## Error Handling
+
+Both adapters map SQLite errors to Prisma error codes:
+
+```typescript
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  if (error.code === 'P2002') {
+    // UNIQUE constraint failed
+  }
+  if (error.code === 'P2003') {
+    // FOREIGN KEY constraint failed
+  }
+}
+```
+
+Common error mappings:
+
+| SQLite Error Code | Prisma Code | Description |
+|-------------------|-------------|-------------|
+| 19 (CONSTRAINT) | P2002 | Unique constraint violation |
+| 19 (CONSTRAINT) | P2003 | Foreign key constraint violation |
+| 19 (CONSTRAINT) | P2011 | Not null constraint violation |
+
+## Next Steps
+
+- [PostgreSQL Adapters](/adapters/postgresql)
+- [MySQL/MariaDB Adapters](/adapters/mysql)
+- [Cloudflare D1 Adapter](/adapters/edge-runtime#cloudflare-d1-adapter)
+- [Driver Adapters Overview](/adapters/overview)

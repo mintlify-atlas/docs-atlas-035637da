@@ -1,122 +1,144 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Prisma ORM",
+  "theme": "sequoia",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#5A67D8",
+    "light": "#7C3AED",
+    "dark": "#4338CA"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/prisma/prisma"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/prisma/prisma"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/schema",
+              "concepts/prisma-config",
+              "concepts/data-model",
+              "concepts/generators"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Prisma Client",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "client/overview",
+              "client/setup",
+              "client/crud-operations",
+              "client/queries",
+              "client/relations",
+              "client/filtering-sorting",
+              "client/aggregations",
+              "client/transactions",
+              "client/middleware",
+              "client/extensions",
+              "client/error-handling"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Prisma Migrate",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "migrate/overview",
+              "migrate/getting-started",
+              "migrate/migration-workflows",
+              "migrate/schema-prototyping",
+              "migrate/introspection",
+              "migrate/baseline"
+            ]
+          },
+          {
+            "group": "Driver Adapters",
+            "pages": [
+              "adapters/overview",
+              "adapters/postgresql",
+              "adapters/mysql",
+              "adapters/sqlite",
+              "adapters/sql-server",
+              "adapters/mongodb",
+              "adapters/edge-runtime"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/deployment",
+              "guides/performance",
+              "guides/testing",
+              "guides/connection-pooling",
+              "guides/raw-queries",
+              "guides/type-safety"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Client API",
             "pages": [
-              "api-reference/introduction"
+              "api/client-constructor",
+              "api/crud-methods",
+              "api/query-options",
+              "api/transaction-api",
+              "api/raw-query-api"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "CLI Commands",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/cli-overview",
+              "api/prisma-generate",
+              "api/prisma-migrate",
+              "api/prisma-db",
+              "api/prisma-studio",
+              "api/prisma-validate",
+              "api/prisma-format"
+            ]
+          },
+          {
+            "group": "Schema Reference",
+            "pages": [
+              "api/schema-datasource",
+              "api/schema-generator",
+              "api/schema-models",
+              "api/schema-fields",
+              "api/schema-attributes",
+              "api/schema-relations"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/prisma-config",
+              "api/environment-variables",
+              "api/generator-options"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

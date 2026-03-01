@@ -1,0 +1,328 @@
+---
+title: Edge Runtime Driver Adapters
+description: Use Prisma ORM in edge runtimes with serverless database drivers
+---
+
+# Edge Runtime Driver Adapters
+
+Prisma ORM provides driver adapters optimized for edge runtimes and serverless platforms. These adapters use HTTP-based connections and are compatible with environments like Cloudflare Workers, Vercel Edge Functions, and other edge platforms.
+
+## Cloudflare D1 Adapter
+
+The `@prisma/adapter-d1` package enables usage of [Cloudflare D1](https://developers.cloudflare.com/d1/), Cloudflare's serverless SQLite database.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-d1
+npm install --save-dev @cloudflare/workers-types
+npm install --save-dev wrangler
+```
+
+### Usage in Cloudflare Workers
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaD1 } from '@prisma/adapter-d1'
+
+export interface Env {
+  // This must match the binding name in wrangler.toml
+  MY_DATABASE: D1Database
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Initialize Prisma Client with D1 adapter
+    const adapter = new PrismaD1(env.MY_DATABASE)
+    const prisma = new PrismaClient({ adapter })
+
+    // Execute queries
+    const usersCount = await prisma.user.count()
+
+    return new Response(`Users: ${usersCount}`)
+  },
+}
+```
+
+### Wrangler Configuration
+
+Configure your D1 database binding in `wrangler.toml`:
+
+```toml
+[[d1_databases]]
+binding = "MY_DATABASE"              # Available in Worker as env.MY_DATABASE
+database_name = "my_database_name"
+database_id = "<unique-ID-for-your-database>"
+```
+
+### JavaScript Example
+
+```javascript
+import { PrismaClient } from '@prisma/client'
+import { PrismaD1 } from '@prisma/adapter-d1'
+
+export default {
+  async fetch(request, env, ctx) {
+    const adapter = new PrismaD1(env.MY_DATABASE)
+    const prisma = new PrismaClient({ adapter })
+
+    const users = await prisma.user.findMany()
+
+    return new Response(JSON.stringify(users))
+  },
+}
+```
+
+### Features
+
+- Cloudflare Workers runtime support
+- SQLite compatibility
+- HTTP-based queries (no TCP connections)
+- Automatic connection management
+- Full Prisma Client API support
+
+### Limitations
+
+- Transactions are not supported (D1 limitation)
+- Interactive transactions (`$transaction`) will throw an error
+- No migration execution from Workers (use Wrangler CLI)
+
+### Migrations
+
+Migrations must be applied using the Wrangler CLI, not from your Worker:
+
+```bash
+# Generate migration
+npx prisma migrate dev --name init
+
+# Apply migration to local D1
+npx wrangler d1 execute MY_DATABASE --local --file=./prisma/migrations/*/migration.sql
+
+# Apply migration to production D1
+npx wrangler d1 execute MY_DATABASE --file=./prisma/migrations/*/migration.sql
+```
+
+See the [Cloudflare D1 documentation](https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1#migration-workflows) for detailed migration workflows.
+
+### Local Development
+
+Test your Worker locally with Wrangler:
+
+```bash
+npx wrangler dev
+```
+
+---
+
+## PlanetScale Adapter
+
+The `@prisma/adapter-planetscale` package enables usage of [PlanetScale's serverless driver](https://github.com/planetscale/database-js) for MySQL databases over HTTP.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-planetscale
+npm install undici  # For Node.js < 18
+```
+
+### Usage
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+import { PrismaClient } from '@prisma/client'
+import { fetch as undiciFetch } from 'undici'  // Only for Node.js < 18
+
+const connectionString = process.env.DATABASE_URL
+
+const adapter = new PrismaPlanetScale({ 
+  url: connectionString,
+  fetch: undiciFetch  // Optional: only needed for Node.js < 18
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Node.js 18+
+
+Node.js 18 and later include built-in `fetch`, so you don't need `undici`:
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaPlanetScale({ 
+  url: process.env.DATABASE_URL 
+})
+
+const prisma = new PrismaClient({ adapter })
+```
+
+### Configuration Options
+
+The adapter accepts PlanetScale client configuration:
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+
+const adapter = new PrismaPlanetScale({
+  url: process.env.DATABASE_URL,
+  fetch: globalThis.fetch,           // Custom fetch implementation
+  cast: (field, value) => value,     // Custom type casting
+})
+```
+
+### Connection String Format
+
+Update your connection string to use PlanetScale's HTTP endpoint:
+
+```bash
+DATABASE_URL="mysql://user:password@aws.connect.psdb.cloud/database_name?sslaccept=strict"
+```
+
+**Important**: Use `aws.connect.psdb.cloud` as the host for HTTP connections.
+
+### Transaction Support
+
+The adapter supports transactions:
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' }
+  })
+  
+  const profile = await tx.profile.create({
+    data: { userId: user.id, bio: 'Hello' }
+  })
+  
+  return { user, profile }
+})
+```
+
+### Isolation Levels
+
+Supported isolation levels:
+- `READ UNCOMMITTED`
+- `READ COMMITTED`
+- `REPEATABLE READ` (default)
+- `SERIALIZABLE`
+
+```typescript
+const result = await prisma.$transaction(
+  async (tx) => {
+    // Your queries
+  },
+  {
+    isolationLevel: 'SERIALIZABLE'
+  }
+)
+```
+
+### Edge Runtime Support
+
+The adapter works in edge runtimes:
+
+#### Vercel Edge Functions
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+import { PrismaClient } from '@prisma/client'
+
+export const config = {
+  runtime: 'edge',
+}
+
+export default async function handler(request: Request) {
+  const adapter = new PrismaPlanetScale({ 
+    url: process.env.DATABASE_URL 
+  })
+  const prisma = new PrismaClient({ adapter })
+  
+  const users = await prisma.user.findMany()
+  
+  return new Response(JSON.stringify(users))
+}
+```
+
+#### Cloudflare Workers
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+import { PrismaClient } from '@prisma/client'
+
+export default {
+  async fetch(request: Request, env: any) {
+    const adapter = new PrismaPlanetScale({ 
+      url: env.DATABASE_URL 
+    })
+    const prisma = new PrismaClient({ adapter })
+    
+    const users = await prisma.user.findMany()
+    
+    return new Response(JSON.stringify(users))
+  },
+}
+```
+
+### Features
+
+- HTTP-based connections (no TCP required)
+- Edge runtime compatible
+- Full transaction support
+- Savepoints for nested transactions
+- Improved connection reliability and performance with HTTP/3
+
+### Performance Benefits
+
+- [Faster MySQL with HTTP/3](https://planetscale.com/blog/faster-mysql-with-http3)
+- Reduced connection overhead in serverless environments
+- No connection pooling required
+
+### Limitations
+
+- Requires PlanetScale database
+- Must use HTTP connection endpoint (`aws.connect.psdb.cloud`)
+
+---
+
+## Edge Runtime Comparison
+
+| Feature | Cloudflare D1 | PlanetScale |
+|---------|---------------|-------------|
+| **Database** | SQLite | MySQL |
+| **Protocol** | HTTP | HTTP |
+| **Transactions** | No | Yes |
+| **Savepoints** | No | Yes |
+| **Platform** | Cloudflare Workers | Any edge runtime |
+| **Migration Execution** | Wrangler CLI only | Standard Prisma Migrate |
+| **Best For** | Cloudflare-native apps | Multi-platform edge apps |
+
+## Other Edge-Compatible Adapters
+
+These adapters also support edge runtimes:
+
+- **[Neon HTTP mode](/adapters/postgresql#http-mode)**: PostgreSQL over HTTP
+- **[libSQL/Turso](/adapters/sqlite#libsql-turso-adapter)**: SQLite over HTTP with edge support
+
+## Error Handling
+
+Edge runtime adapters map database errors to Prisma error codes:
+
+```typescript
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  if (error.code === 'P2002') {
+    console.log('Unique constraint violation')
+  }
+}
+```
+
+## Next Steps
+
+- [PostgreSQL Adapters](/adapters/postgresql)
+- [SQLite Adapters](/adapters/sqlite)
+- [MySQL/MariaDB Adapters](/adapters/mysql)
+- [Driver Adapters Overview](/adapters/overview)

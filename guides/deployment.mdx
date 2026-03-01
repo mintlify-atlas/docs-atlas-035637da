@@ -1,0 +1,295 @@
+---
+title: Deployment Guide
+description: Best practices for deploying Prisma applications to production environments
+---
+
+## Overview
+
+Prisma ORM works seamlessly in production environments across various platforms. This guide covers deployment strategies, configuration management, and platform-specific considerations.
+
+## Configuration Management
+
+### Using prisma.config.ts
+
+Prisma 7 introduces `prisma.config.ts` for managing database connections and configuration:
+
+```typescript prisma.config.ts
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+  },
+})
+```
+
+<Tip>
+The `env()` helper safely loads environment variables at runtime, eliminating the need for `.env` files in production.
+</Tip>
+
+### Environment Variables
+
+Store sensitive credentials in environment variables:
+
+```bash
+DATABASE_URL="postgresql://user:password@host:5432/dbname"
+```
+
+<Warning>
+Never commit credentials to version control. Use platform-specific secret management services.
+</Warning>
+
+## Platform Deployment
+
+### Serverless Platforms
+
+#### Vercel
+
+Prisma works out-of-the-box on Vercel:
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+// Singleton pattern for serverless
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
+```
+
+#### AWS Lambda
+
+For Lambda, use driver adapters with connection pooling:
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@prisma/client'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+})
+
+const adapter = new PrismaPg({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+### Edge Runtime
+
+#### Cloudflare Workers
+
+Use the D1 adapter for Cloudflare D1 databases:
+
+```typescript
+import { PrismaD1 } from '@prisma/adapter-d1'
+import { PrismaClient } from '@prisma/client'
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const adapter = new PrismaD1(env.DB)
+    const prisma = new PrismaClient({ adapter })
+    
+    const users = await prisma.user.findMany()
+    return Response.json(users)
+  },
+}
+```
+
+### Container Deployment
+
+#### Docker
+
+Multi-stage Dockerfile for optimized builds:
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package*.json ./
+COPY prisma ./prisma/
+
+RUN npm ci
+RUN npx prisma generate
+
+COPY . .
+RUN npm run build
+
+# Production image
+FROM node:20-alpine
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+```
+
+<Tip>
+Prisma Client is generated during the build step and doesn't require the Prisma CLI at runtime.
+</Tip>
+
+## Database Connection Management
+
+### Connection Limits
+
+Be mindful of database connection limits:
+
+```typescript
+const prisma = new PrismaClient({
+  // PostgreSQL default max_connections is 100
+  // Leave headroom for other services
+})
+```
+
+<Warning>
+Exceeding connection limits will cause errors:
+```
+Error querying the database: FATAL: sorry, too many clients already
+```
+</Warning>
+
+### Graceful Shutdown
+
+Always disconnect on application shutdown:
+
+```typescript
+process.on('SIGINT', async () => {
+  await prisma.$disconnect()
+  process.exit(0)
+})
+
+process.on('SIGTERM', async () => {
+  await prisma.$disconnect()
+  process.exit(0)
+})
+```
+
+## Driver Adapters
+
+Prisma 7 uses JavaScript driver adapters for database connectivity:
+
+### PostgreSQL
+
+**node-postgres (pg)**
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
+
+const adapter = new PrismaPg({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+**Neon Serverless**
+```typescript
+import { PrismaNeon } from '@prisma/adapter-neon'
+import { Pool } from '@neondatabase/serverless'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaNeon({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+### SQLite
+
+**better-sqlite3**
+```typescript
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import Database from 'better-sqlite3'
+
+const db = new Database('prisma/dev.db')
+const adapter = new PrismaBetterSqlite3(db)
+const prisma = new PrismaClient({ adapter })
+```
+
+**Turso/LibSQL**
+```typescript
+import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { createClient } from '@libsql/client'
+
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+})
+
+const adapter = new PrismaLibSQL(client)
+const prisma = new PrismaClient({ adapter })
+```
+
+## Migration Strategy
+
+### Production Migrations
+
+Run migrations as part of your deployment pipeline:
+
+```bash
+# In your CI/CD pipeline
+npx prisma migrate deploy
+```
+
+<Warning>
+Never use `prisma migrate dev` in production. Use `prisma migrate deploy` instead.
+</Warning>
+
+### Zero-Downtime Deployments
+
+For zero-downtime deployments:
+
+1. **Expand phase**: Add new columns/tables (backward compatible)
+2. **Deploy application**: Code uses both old and new schema
+3. **Migrate data**: Populate new columns from old data
+4. **Contract phase**: Remove old columns/tables
+
+## Monitoring and Logging
+
+Enable query logging for debugging:
+
+```typescript
+const prisma = new PrismaClient({
+  log: [
+    { emit: 'event', level: 'query' },
+    { emit: 'event', level: 'error' },
+    { emit: 'event', level: 'warn' },
+  ],
+})
+
+prisma.$on('query', (e) => {
+  console.log('Query: ' + e.query)
+  console.log('Duration: ' + e.duration + 'ms')
+})
+```
+
+<Tip>
+Disable query logging in production for better performance. Enable only for debugging specific issues.
+</Tip>
+
+## Best Practices
+
+1. **Use connection pooling** for serverless environments
+2. **Implement singleton pattern** to reuse PrismaClient instances
+3. **Set appropriate timeouts** for your workload
+4. **Monitor query performance** with logging
+5. **Use environment-specific configurations** via `prisma.config.ts`
+6. **Handle disconnections gracefully** on shutdown
+7. **Keep migrations in version control** and deploy them systematically
+
+## Security Checklist
+
+- [ ] Database credentials stored in environment variables
+- [ ] SSL/TLS enabled for database connections
+- [ ] Connection limits configured appropriately
+- [ ] Query logging disabled in production (or sanitized)
+- [ ] Prisma Client generated during build, not at runtime
+- [ ] Migrations tested in staging before production
+- [ ] Error messages don't expose sensitive information

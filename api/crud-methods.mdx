@@ -1,0 +1,657 @@
+---
+title: CRUD Methods
+description: Complete reference for all Prisma Client CRUD operation methods
+---
+
+# CRUD Methods
+
+Prisma Client provides a comprehensive set of CRUD (Create, Read, Update, Delete) methods for each model in your schema.
+
+## Read Operations
+
+### findUnique
+
+Retrieve a single record by unique identifier or unique constraint.
+
+```typescript
+findUnique<T>(args: {
+  where: WhereUniqueInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T | null>
+```
+
+<ParamField path="where" type="object" required>
+  Unique constraint to identify the record. Must use a unique field or combination of fields.
+  
+  ```typescript
+  // By ID
+  const user = await prisma.user.findUnique({
+    where: { id: 1 }
+  })
+  
+  // By unique email
+  const user = await prisma.user.findUnique({
+    where: { email: 'alice@prisma.io' }
+  })
+  
+  // By compound unique constraint
+  const post = await prisma.post.findUnique({
+    where: {
+      authorId_title: {
+        authorId: 1,
+        title: 'Hello World'
+      }
+    }
+  })
+  ```
+</ParamField>
+
+<ResponseField name="return" type="Model | null">
+  Returns the matching record or `null` if not found.
+</ResponseField>
+
+---
+
+### findUniqueOrThrow
+
+Like `findUnique`, but throws an error if no record is found.
+
+```typescript
+findUniqueOrThrow<T>(args: {
+  where: WhereUniqueInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T>
+```
+
+<ResponseField name="return" type="Model">
+  Returns the matching record or throws `PrismaClientKnownRequestError` with code `P2025` if not found.
+</ResponseField>
+
+---
+
+### findFirst
+
+Retrieve the first record that matches the filter criteria.
+
+```typescript
+findFirst<T>(args?: {
+  where?: WhereInput
+  orderBy?: OrderByInput
+  cursor?: WhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: FieldName[]
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T | null>
+```
+
+<ParamField path="where" type="object">
+  Filter conditions to match records.
+</ParamField>
+
+<ParamField path="orderBy" type="object | array">
+  Sort order for selecting the first record.
+  
+  ```typescript
+  // Single field
+  orderBy: { createdAt: 'desc' }
+  
+  // Multiple fields
+  orderBy: [
+    { createdAt: 'desc' },
+    { name: 'asc' }
+  ]
+  ```
+</ParamField>
+
+<ParamField path="cursor" type="object">
+  Cursor-based pagination starting point.
+</ParamField>
+
+<ParamField path="take" type="number">
+  Limit the number of records (used with pagination).
+</ParamField>
+
+<ParamField path="skip" type="number">
+  Skip a number of records (offset pagination).
+</ParamField>
+
+<ParamField path="distinct" type="array">
+  Select distinct records based on one or more fields.
+  
+  ```typescript
+  distinct: ['email', 'name']
+  ```
+</ParamField>
+
+**Example:**
+```typescript
+const user = await prisma.user.findFirst({
+  where: { role: 'ADMIN' },
+  orderBy: { createdAt: 'desc' }
+})
+```
+
+---
+
+### findFirstOrThrow
+
+Like `findFirst`, but throws an error if no record is found.
+
+```typescript
+findFirstOrThrow<T>(args?: FindFirstArgs): Promise<T>
+```
+
+---
+
+### findMany
+
+Retrieve multiple records that match the filter criteria.
+
+```typescript
+findMany<T>(args?: {
+  where?: WhereInput
+  orderBy?: OrderByInput
+  cursor?: WhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: FieldName[]
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T[]>
+```
+
+**Example:**
+```typescript
+const users = await prisma.user.findMany({
+  where: {
+    email: {
+      endsWith: '@prisma.io'
+    }
+  },
+  orderBy: { createdAt: 'desc' },
+  take: 10,
+  skip: 20
+})
+```
+
+<ResponseField name="return" type="Model[]">
+  Returns an array of matching records (empty array if none found).
+</ResponseField>
+
+---
+
+## Create Operations
+
+### create
+
+Create a single new record.
+
+```typescript
+create<T>(args: {
+  data: CreateInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T>
+```
+
+<ParamField path="data" type="object" required>
+  Data for creating the new record.
+  
+  ```typescript
+  const user = await prisma.user.create({
+    data: {
+      email: 'alice@prisma.io',
+      name: 'Alice',
+      posts: {
+        create: [
+          { title: 'First Post' },
+          { title: 'Second Post' }
+        ]
+      }
+    }
+  })
+  ```
+</ParamField>
+
+<ResponseField name="return" type="Model">
+  Returns the newly created record.
+</ResponseField>
+
+---
+
+### createMany
+
+Create multiple records in a single transaction.
+
+```typescript
+createMany(args: {
+  data: CreateInput[]
+  skipDuplicates?: boolean
+}): Promise<{ count: number }>
+```
+
+<ParamField path="data" type="array" required>
+  Array of data objects to create.
+</ParamField>
+
+<ParamField path="skipDuplicates" type="boolean">
+  Skip records that would violate unique constraints instead of throwing an error.
+</ParamField>
+
+**Example:**
+```typescript
+const result = await prisma.user.createMany({
+  data: [
+    { email: 'alice@prisma.io', name: 'Alice' },
+    { email: 'bob@prisma.io', name: 'Bob' }
+  ],
+  skipDuplicates: true
+})
+
+console.log(`Created ${result.count} users`)
+```
+
+<ResponseField name="return" type="{ count: number }">
+  Returns an object with the count of created records.
+</ResponseField>
+
+<Note>
+  `createMany` does not return the created records. Use `createManyAndReturn` if you need the records.
+</Note>
+
+---
+
+### createManyAndReturn
+
+Create multiple records and return them.
+
+```typescript
+createManyAndReturn<T>(args: {
+  data: CreateInput[]
+  skipDuplicates?: boolean
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T[]>
+```
+
+**Example:**
+```typescript
+const users = await prisma.user.createManyAndReturn({
+  data: [
+    { email: 'alice@prisma.io', name: 'Alice' },
+    { email: 'bob@prisma.io', name: 'Bob' }
+  ]
+})
+```
+
+<ResponseField name="return" type="Model[]">
+  Returns an array of the newly created records.
+</ResponseField>
+
+---
+
+## Update Operations
+
+### update
+
+Update a single record identified by a unique constraint.
+
+```typescript
+update<T>(args: {
+  where: WhereUniqueInput
+  data: UpdateInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T>
+```
+
+<ParamField path="where" type="object" required>
+  Unique constraint to identify the record to update.
+</ParamField>
+
+<ParamField path="data" type="object" required>
+  Data to update.
+  
+  ```typescript
+  const user = await prisma.user.update({
+    where: { id: 1 },
+    data: {
+      email: 'alice.new@prisma.io',
+      posts: {
+        create: { title: 'New Post' },
+        updateMany: {
+          where: { published: false },
+          data: { published: true }
+        }
+      }
+    }
+  })
+  ```
+</ParamField>
+
+<ResponseField name="return" type="Model">
+  Returns the updated record or throws `P2025` if not found.
+</ResponseField>
+
+---
+
+### updateMany
+
+Update multiple records that match the filter criteria.
+
+```typescript
+updateMany(args: {
+  where?: WhereInput
+  data: UpdateInput
+}): Promise<{ count: number }>
+```
+
+**Example:**
+```typescript
+const result = await prisma.user.updateMany({
+  where: {
+    role: 'USER'
+  },
+  data: {
+    active: true
+  }
+})
+
+console.log(`Updated ${result.count} users`)
+```
+
+<ResponseField name="return" type="{ count: number }">
+  Returns an object with the count of updated records.
+</ResponseField>
+
+---
+
+### updateManyAndReturn
+
+Update multiple records and return them.
+
+```typescript
+updateManyAndReturn<T>(args: {
+  where?: WhereInput
+  data: UpdateInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T[]>
+```
+
+<ResponseField name="return" type="Model[]">
+  Returns an array of the updated records.
+</ResponseField>
+
+---
+
+### upsert
+
+Update an existing record or create a new one if it doesn't exist.
+
+```typescript
+upsert<T>(args: {
+  where: WhereUniqueInput
+  create: CreateInput
+  update: UpdateInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T>
+```
+
+<ParamField path="where" type="object" required>
+  Unique constraint to check for existing record.
+</ParamField>
+
+<ParamField path="create" type="object" required>
+  Data to use if creating a new record.
+</ParamField>
+
+<ParamField path="update" type="object" required>
+  Data to use if updating an existing record.
+</ParamField>
+
+**Example:**
+```typescript
+const user = await prisma.user.upsert({
+  where: { email: 'alice@prisma.io' },
+  create: {
+    email: 'alice@prisma.io',
+    name: 'Alice'
+  },
+  update: {
+    name: 'Alice Updated'
+  }
+})
+```
+
+---
+
+## Delete Operations
+
+### delete
+
+Delete a single record identified by a unique constraint.
+
+```typescript
+delete<T>(args: {
+  where: WhereUniqueInput
+  select?: SelectInput
+  include?: IncludeInput
+  omit?: OmitInput
+}): Promise<T>
+```
+
+**Example:**
+```typescript
+const user = await prisma.user.delete({
+  where: { id: 1 }
+})
+```
+
+<ResponseField name="return" type="Model">
+  Returns the deleted record or throws `P2025` if not found.
+</ResponseField>
+
+---
+
+### deleteMany
+
+Delete multiple records that match the filter criteria.
+
+```typescript
+deleteMany(args?: {
+  where?: WhereInput
+}): Promise<{ count: number }>
+```
+
+**Example:**
+```typescript
+const result = await prisma.user.deleteMany({
+  where: {
+    active: false
+  }
+})
+
+console.log(`Deleted ${result.count} users`)
+```
+
+<ResponseField name="return" type="{ count: number }">
+  Returns an object with the count of deleted records.
+</ResponseField>
+
+<Warning>
+  Calling `deleteMany` without a `where` clause will delete ALL records from the table.
+</Warning>
+
+---
+
+## Aggregation Operations
+
+### count
+
+Count records that match the filter criteria.
+
+```typescript
+count(args?: {
+  where?: WhereInput
+  orderBy?: OrderByInput
+  cursor?: WhereUniqueInput
+  take?: number
+  skip?: number
+  select?: { _all?: boolean } | true
+}): Promise<number | object>
+```
+
+**Example:**
+```typescript
+// Simple count
+const count = await prisma.user.count()
+
+// Count with filter
+const activeUsers = await prisma.user.count({
+  where: { active: true }
+})
+
+// Count specific fields
+const counts = await prisma.user.count({
+  select: {
+    _all: true,
+    email: true
+  }
+})
+```
+
+---
+
+### aggregate
+
+Perform aggregation operations on numeric fields.
+
+```typescript
+aggregate(args?: {
+  where?: WhereInput
+  orderBy?: OrderByInput
+  cursor?: WhereUniqueInput
+  take?: number
+  skip?: number
+  _count?: boolean | { [field]: boolean }
+  _avg?: { [field]: boolean }
+  _sum?: { [field]: boolean }
+  _min?: { [field]: boolean }
+  _max?: { [field]: boolean }
+}): Promise<AggregateResult>
+```
+
+**Example:**
+```typescript
+const result = await prisma.user.aggregate({
+  _count: { _all: true },
+  _avg: { age: true },
+  _max: { age: true },
+  _min: { age: true },
+  where: { active: true }
+})
+```
+
+---
+
+### groupBy
+
+Group records by one or more fields and perform aggregations.
+
+```typescript
+groupBy(args: {
+  by: FieldName[]
+  where?: WhereInput
+  orderBy?: OrderByInput
+  having?: HavingInput
+  take?: number
+  skip?: number
+  _count?: boolean | { [field]: boolean }
+  _avg?: { [field]: boolean }
+  _sum?: { [field]: boolean }
+  _min?: { [field]: boolean }
+  _max?: { [field]: boolean }
+}): Promise<GroupByResult[]>
+```
+
+<ParamField path="by" type="array" required>
+  Fields to group by.
+</ParamField>
+
+<ParamField path="having" type="object">
+  Filter groups based on aggregated values.
+</ParamField>
+
+**Example:**
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['role'],
+  _count: { _all: true },
+  _avg: { age: true },
+  having: {
+    age: {
+      _avg: { gt: 30 }
+    }
+  }
+})
+```
+
+---
+
+## MongoDB-Specific Operations
+
+### findRaw
+
+Execute a raw MongoDB find operation.
+
+```typescript
+findRaw(args: {
+  filter?: object
+  options?: object
+}): Promise<any>
+```
+
+<Note>
+  Only available when using the MongoDB provider.
+</Note>
+
+---
+
+### aggregateRaw
+
+Execute a raw MongoDB aggregation pipeline.
+
+```typescript
+aggregateRaw(args: {
+  pipeline?: object[]
+  options?: object
+}): Promise<any>
+```
+
+<Note>
+  Only available when using the MongoDB provider.
+</Note>
+
+---
+
+## See Also
+
+- [Query Options](/api/query-options)
+- [Filtering and Sorting](/client/filtering-sorting)
+- [Relations](/client/relations)
+- [Transactions](/api/transaction-api)

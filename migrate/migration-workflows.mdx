@@ -1,0 +1,363 @@
+---
+title: Migration Workflows
+description: Learn the recommended workflows for using Prisma Migrate in development and production environments.
+---
+
+Prisma Migrate has different workflows optimized for development and production environments.
+
+## Development Workflow
+
+Use `prisma migrate dev` during development to create and apply migrations.
+
+### Basic Development Flow
+
+<Steps>
+  <Step title="Update Your Schema">
+    Make changes to your Prisma schema:
+
+    ```prisma
+    model User {
+      id    Int     @id @default(autoincrement())
+      email String  @unique
+      name  String?
+      role  Role    @default(USER)  // New field
+    }
+
+    enum Role {
+      USER
+      ADMIN
+    }
+    ```
+  </Step>
+
+  <Step title="Create and Apply Migration">
+    ```bash
+    prisma migrate dev --name add_user_roles
+    ```
+
+    This command:
+    - Creates a new migration from schema changes
+    - Applies it to your development database
+    - Triggers generators (e.g., Prisma Client)
+  </Step>
+
+  <Step title="Test Your Changes">
+    The database schema is now updated and Prisma Client has been regenerated with the new types:
+
+    ```typescript
+    const user = await prisma.user.create({
+      data: {
+        email: 'alice@prisma.io',
+        name: 'Alice',
+        role: 'ADMIN'  // TypeScript knows this field exists
+      }
+    })
+    ```
+  </Step>
+</Steps>
+
+### Creating Draft Migrations
+
+Use `--create-only` when you need to review or edit the SQL:
+
+<Steps>
+  <Step title="Create Draft Migration">
+    ```bash
+    prisma migrate dev --create-only --name add_custom_index
+    ```
+
+    Output:
+    ```
+    Prisma Migrate created the following migration without applying it 20201231000000_add_custom_index
+
+    You can now edit it and apply it by running prisma migrate dev.
+    ```
+  </Step>
+
+  <Step title="Edit the Migration">
+    Customize the generated SQL:
+
+    ```sql prisma/migrations/20201231000000_add_custom_index/migration.sql
+    -- CreateIndex
+    CREATE INDEX "User_email_name_idx" ON "User"("email", "name");
+
+    -- Custom: Add partial index for active users
+    CREATE INDEX "User_active_email_idx" 
+      ON "User"("email") 
+      WHERE "deletedAt" IS NULL;
+    ```
+  </Step>
+
+  <Step title="Apply the Migration">
+    ```bash
+    prisma migrate dev
+    ```
+
+    The edited migration will be applied to your database.
+  </Step>
+</Steps>
+
+### Handling Development Database Resets
+
+Sometimes Prisma Migrate needs to reset your database:
+
+```
+Drift detected: Your database schema is not in sync with your migration history.
+
+We need to reset the "public" schema
+
+You may use prisma migrate reset to drop the development database.
+All data will be lost.
+```
+
+Common reasons for resets:
+- Migration history doesn't match database state
+- Manual changes were made to the database
+- Migrations were deleted or edited
+
+To reset your database:
+
+```bash
+prisma migrate reset
+```
+
+## Production Workflow
+
+Use `prisma migrate deploy` to apply pending migrations in production.
+
+### Deployment Flow
+
+<Steps>
+  <Step title="Develop Locally">
+    Create and test migrations in development:
+
+    ```bash
+    # Development
+    prisma migrate dev --name add_analytics
+    ```
+  </Step>
+
+  <Step title="Commit Migrations">
+    Commit the migration files to version control:
+
+    ```bash
+    git add prisma/migrations
+    git commit -m "Add analytics tracking"
+    git push
+    ```
+  </Step>
+
+  <Step title="Check Status in Production">
+    Before deploying, check the migration status:
+
+    ```bash
+    # Production environment
+    prisma migrate status
+    ```
+
+    Output:
+    ```
+    2 migrations found in prisma/migrations
+
+    Following migration has not yet been applied:
+    20210101120000_add_analytics
+
+    To apply migrations in production run prisma migrate deploy.
+    ```
+  </Step>
+
+  <Step title="Deploy Migrations">
+    Apply pending migrations:
+
+    ```bash
+    prisma migrate deploy
+    ```
+
+    Output:
+    ```
+    1 migration found in prisma/migrations
+
+    The following migration(s) have been applied:
+
+    migrations/
+      └─ 20210101120000_add_analytics/
+        └─ migration.sql
+
+    All migrations have been successfully applied.
+    ```
+  </Step>
+</Steps>
+
+### Using `migrate deploy` in CI/CD
+
+Add migration deployment to your CI/CD pipeline:
+
+```yaml .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      
+      - name: Deploy application
+        run: npm run deploy
+```
+
+## Checking Migration Status
+
+Use `prisma migrate status` to check the state of your migrations:
+
+```bash
+prisma migrate status
+```
+
+### Possible Outputs
+
+#### All migrations applied
+
+```
+2 migrations found in prisma/migrations
+
+Database schema is up to date!
+```
+
+#### Pending migrations
+
+```
+3 migrations found in prisma/migrations
+
+Following migration has not yet been applied:
+20210115120000_add_notifications
+
+To apply migrations in development run prisma migrate dev.
+To apply migrations in production run prisma migrate deploy.
+```
+
+#### Failed migration
+
+```
+Following migration has failed:
+20210115120000_add_notifications
+
+During development if the failed migration has not been deployed to a production database 
+you can then fix the migration and run prisma migrate dev.
+
+The failed migration can be marked as rolled back or applied:
+
+- If you rolled back the migration manually:
+prisma migrate resolve --rolled-back "20210115120000_add_notifications"
+
+- If you fixed the database manually (hotfix):
+prisma migrate resolve --applied "20210115120000_add_notifications"
+```
+
+## Resetting Your Database
+
+Use `prisma migrate reset` to reset your development database:
+
+```bash
+prisma migrate reset
+```
+
+This command:
+1. Drops the database
+2. Creates a new database
+3. Applies all migrations
+4. Runs seed scripts (if configured)
+
+<Warning>
+  `prisma migrate reset` is only for development. Never use it in production as it will delete all data.
+</Warning>
+
+### Force Reset
+
+Skip the confirmation prompt:
+
+```bash
+prisma migrate reset --force
+```
+
+## Comparing Schemas with `migrate diff`
+
+Compare database schemas from different sources:
+
+```bash
+prisma migrate diff \
+  --from-url "$DATABASE_URL" \
+  --to-url "postgresql://user:pass@localhost:5432/db" \
+  --script
+```
+
+This generates a SQL script showing the differences.
+
+## Team Collaboration
+
+### Pulling Changes
+
+When pulling migration files from git:
+
+<Steps>
+  <Step title="Pull Latest Changes">
+    ```bash
+    git pull
+    ```
+  </Step>
+
+  <Step title="Apply New Migrations">
+    ```bash
+    prisma migrate dev
+    ```
+
+    This applies any new migrations created by teammates.
+  </Step>
+</Steps>
+
+### Handling Conflicts
+
+If two developers create migrations simultaneously:
+
+1. Pull the latest changes
+2. Run `prisma migrate dev` to apply teammate's migration
+3. Your migration will be created after theirs
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Never Edit Applied Migrations" icon="lock">
+    Once a migration is applied, don't edit it. Create a new migration instead.
+  </Card>
+  <Card title="Review Before Deploy" icon="eye">
+    Always review migrations and test in staging before production deployment.
+  </Card>
+  <Card title="Use migrate deploy" icon="server">
+    Use `migrate deploy` in production, never `migrate dev`.
+  </Card>
+  <Card title="Monitor Migration Status" icon="chart-line">
+    Regularly check migration status in production environments.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schema Prototyping" icon="flask" href="/migrate/schema-prototyping">
+    Use db push for rapid development
+  </Card>
+  <Card title="Resolving Issues" icon="wrench" href="/migrate/baseline">
+    Handle failed migrations and baselines
+  </Card>
+</CardGroup>

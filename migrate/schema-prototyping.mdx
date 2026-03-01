@@ -1,0 +1,371 @@
+---
+title: Schema Prototyping with db push
+description: Learn how to use db push for rapid schema prototyping during early development without creating migrations.
+---
+
+Use `prisma db push` to sync your Prisma schema with your database during early development and prototyping, without generating migration files.
+
+## What is db push?
+
+`prisma db push` pushes the state from your Prisma schema directly to your database, bypassing the migration history. This is ideal for:
+
+- **Rapid prototyping**: Quickly iterate on your schema design
+- **Early development**: When you're still experimenting with your data model
+- **Local development**: When migration history isn't important yet
+- **Schema validation**: Test schema changes before creating migrations
+
+<Note>
+  `db push` is for development only. Use `prisma migrate` for production databases.
+</Note>
+
+## db push vs migrate dev
+
+| Feature | db push | migrate dev |
+|---------|---------|-------------|
+| Creates migration files | No | Yes |
+| Records history | No | Yes |
+| For production | No | Yes |
+| Speed | Fast | Slower |
+| Use case | Prototyping | Production-ready changes |
+
+## Basic Usage
+
+<Steps>
+  <Step title="Update Your Schema">
+    Make changes to your Prisma schema:
+
+    ```prisma
+    model User {
+      id        Int      @id @default(autoincrement())
+      email     String   @unique
+      name      String?
+      posts     Post[]
+    }
+
+    model Post {
+      id        Int      @id @default(autoincrement())
+      title     String
+      content   String?
+      authorId  Int
+      author    User     @relation(fields: [authorId], references: [id])
+    }
+    ```
+  </Step>
+
+  <Step title="Push to Database">
+    ```bash
+    prisma db push
+    ```
+
+    Output:
+    ```
+    Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+    Your database is now in sync with your Prisma schema. Done in 45ms
+    ```
+  </Step>
+</Steps>
+
+The database schema is updated immediately without creating migration files.
+
+## Command Options
+
+### `--accept-data-loss`
+
+Ignore data loss warnings and proceed:
+
+```bash
+prisma db push --accept-data-loss
+```
+
+Use this when:
+- You're okay with losing data (development only)
+- Running in CI/CD environments
+- The warning is expected (e.g., dropping a test column)
+
+### `--force-reset`
+
+Reset the database before pushing:
+
+```bash
+prisma db push --force-reset
+```
+
+This will:
+1. Drop the database/schema
+2. Recreate it
+3. Apply your schema
+
+<Warning>
+  `--force-reset` deletes all data. Only use in development.
+</Warning>
+
+### `--schema`
+
+Specify a custom schema path:
+
+```bash
+prisma db push --schema=./custom/schema.prisma
+```
+
+### `--config`
+
+Specify a custom config file:
+
+```bash
+prisma db push --config=./prisma.config.ts
+```
+
+### `--url`
+
+Override the datasource URL:
+
+```bash
+prisma db push --url="postgresql://user:pass@localhost:5432/testdb"
+```
+
+## Handling Warnings
+
+### Data Loss Warnings
+
+When changes may result in data loss, you'll see a warning:
+
+```
+⚠️  There might be data loss when applying the changes:
+
+  • You are about to drop the column `age` on the `User` table.
+
+Do you want to ignore the warning(s)?
+```
+
+Options:
+- Type `y` to proceed
+- Type `n` to cancel
+- Use `--accept-data-loss` to skip the prompt
+
+### Unexecutable Changes
+
+Some changes cannot be executed without manual intervention:
+
+```
+⚠️ We found changes that cannot be executed:
+
+  • Added the required column `authorId` to the `Post` table without a default value.
+
+You may use the --force-reset flag to drop the database before push.
+All data will be lost.
+```
+
+Solutions:
+1. Add a default value to the field
+2. Make the field optional
+3. Use `--force-reset` to reset the database
+
+## Prototyping Workflow
+
+Typical workflow when prototyping:
+
+<Steps>
+  <Step title="Initial Schema">
+    Start with a basic schema:
+
+    ```prisma
+    model User {
+      id    Int     @id @default(autoincrement())
+      email String  @unique
+    }
+    ```
+
+    ```bash
+    prisma db push
+    ```
+  </Step>
+
+  <Step title="Rapid Iteration">
+    Add fields and models as you experiment:
+
+    ```prisma
+    model User {
+      id        Int      @id @default(autoincrement())
+      email     String   @unique
+      name      String?
+      createdAt DateTime @default(now())
+      profile   Profile?
+    }
+
+    model Profile {
+      id     Int    @id @default(autoincrement())
+      bio    String?
+      userId Int    @unique
+      user   User   @relation(fields: [userId], references: [id])
+    }
+    ```
+
+    ```bash
+    prisma db push
+    ```
+  </Step>
+
+  <Step title="Continue Testing">
+    Test your changes, iterate quickly:
+
+    ```bash
+    # Make more changes
+    prisma db push
+
+    # Test
+    npm run dev
+
+    # Adjust schema
+    prisma db push
+    ```
+  </Step>
+
+  <Step title="Switch to Migrations">
+    When your schema stabilizes, switch to migrations:
+
+    ```bash
+    # Create initial migration from current schema
+    prisma migrate dev --name init
+    ```
+
+    Now you're using migration-based workflow for production-ready changes.
+  </Step>
+</Steps>
+
+## When Schema is Already in Sync
+
+If no changes are detected:
+
+```
+Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+The database is already in sync with the Prisma schema.
+```
+
+## Resetting During Prototyping
+
+To start fresh while prototyping:
+
+```bash
+prisma db push --force-reset
+```
+
+Or manually reset:
+
+```bash
+# Drop and recreate
+prisma migrate reset --skip-generate
+
+# Then push new schema
+prisma db push
+```
+
+## MongoDB-Specific Behavior
+
+For MongoDB, `db push` only manages indexes:
+
+```
+Datasource "db": MongoDB database "mydb"
+
+Your database indexes are now in sync with your Prisma schema. Done in 120ms
+```
+
+MongoDB is schemaless, so `db push` focuses on:
+- Creating/updating indexes
+- Validating schema correctness
+
+## Transitioning to Migrations
+
+When you're ready to move from prototyping to migrations:
+
+<Steps>
+  <Step title="Finalize Your Schema">
+    Ensure your schema represents your desired final state.
+  </Step>
+
+  <Step title="Create Baseline Migration">
+    ```bash
+    prisma migrate dev --name init
+    ```
+
+    This creates a migration that matches your current database state.
+  </Step>
+
+  <Step title="Continue with migrate dev">
+    From now on, use `prisma migrate dev` for schema changes:
+
+    ```bash
+    # Make schema changes
+    prisma migrate dev --name add_feature
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Development Only" icon="flask">
+    Only use db push in development. Never in production.
+  </Card>
+  <Card title="No Migration History" icon="clock-rotate-left">
+    Remember that db push doesn't create migration history.
+  </Card>
+  <Card title="Transition When Stable" icon="check">
+    Switch to migrations once your schema design is stable.
+  </Card>
+  <Card title="Quick Iterations" icon="bolt">
+    Perfect for rapid experimentation and testing ideas.
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+### Testing Schema Changes
+
+Test changes before creating a migration:
+
+```bash
+# Test the change
+prisma db push
+
+# If it works, create the migration
+prisma migrate dev --name tested_change
+```
+
+### Spike/POC Development
+
+When building a proof of concept:
+
+```bash
+# Rapid changes without migrations
+prisma db push
+prisma db push
+prisma db push
+
+# When POC is approved, create proper migrations
+prisma migrate dev --name implement_poc
+```
+
+### Local Experiments
+
+Try out ideas locally:
+
+```bash
+# Experiment
+prisma db push
+
+# If experiment fails, revert schema and push again
+prisma db push --force-reset
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Migration Workflows" icon="workflow" href="/migrate/migration-workflows">
+    Learn production migration workflows
+  </Card>
+  <Card title="Introspection" icon="database" href="/migrate/introspection">
+    Pull schema from existing databases
+  </Card>
+</CardGroup>

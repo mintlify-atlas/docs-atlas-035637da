@@ -1,0 +1,505 @@
+---
+title: 'Relations'
+description: 'Define relationships between models using Prisma Schema Language.'
+---
+
+## Overview
+
+Relations define how models are connected to each other. Prisma supports three types of relations: one-to-one, one-to-many, and many-to-many.
+
+## One-to-One Relations
+
+A one-to-one relation connects one record to exactly one record in another model.
+
+### Basic One-to-One
+
+```prisma
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  profile Profile?
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String?
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+}
+```
+
+Key points:
+- The side with the foreign key has `@relation(fields: [...], references: [...])`
+- The other side has an optional field (`?`) or is a list
+- Use `@unique` on the foreign key field
+
+### One-to-One with Cascade Delete
+
+```prisma
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  profile Profile?
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+```
+
+## One-to-Many Relations
+
+A one-to-many relation connects one record to multiple records.
+
+### Basic One-to-Many
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  posts Post[]
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int
+  author   User   @relation(fields: [authorId], references: [id])
+}
+```
+
+### One-to-Many with Multiple Relations
+
+```prisma
+model User {
+  id              Int    @id @default(autoincrement())
+  email           String @unique
+  writtenPosts    Post[] @relation("author")
+  moderatedPosts  Post[] @relation("moderator")
+}
+
+model Post {
+  id          Int   @id @default(autoincrement())
+  title       String
+  authorId    Int
+  moderatorId Int?
+
+  author    User  @relation("author", fields: [authorId], references: [id])
+  moderator User? @relation("moderator", fields: [moderatorId], references: [id])
+}
+```
+
+### Referential Actions
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  posts Post[]
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+```
+
+Available actions:
+- `Cascade` - Delete/update related records
+- `Restrict` - Prevent operation if related records exist
+- `NoAction` - Do nothing (may cause database error)
+- `SetNull` - Set foreign key to null
+- `SetDefault` - Set foreign key to default value
+
+## Many-to-Many Relations
+
+Many-to-many relations connect multiple records on both sides.
+
+### Implicit Many-to-Many
+
+Prisma creates a join table automatically:
+
+```prisma
+model Post {
+  id         Int        @id @default(autoincrement())
+  title      String
+  categories Category[]
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String
+  posts Post[]
+}
+```
+
+### Explicit Many-to-Many
+
+Define the join table explicitly for more control:
+
+```prisma
+model Post {
+  id               Int                @id @default(autoincrement())
+  title            String
+  categoryAssignments CategoryOnPost[]
+}
+
+model Category {
+  id         Int              @id @default(autoincrement())
+  name       String
+  posts      CategoryOnPost[]
+}
+
+model CategoryOnPost {
+  postId     Int
+  categoryId Int
+  assignedAt DateTime @default(now())
+  assignedBy String
+
+  post     Post     @relation(fields: [postId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([postId, categoryId])
+}
+```
+
+Advantages of explicit many-to-many:
+- Add extra fields to the relation (timestamps, metadata)
+- Custom naming for the join table
+- Composite primary keys
+- Additional constraints
+
+## Self Relations
+
+Models can reference themselves.
+
+### One-to-Many Self Relation
+
+```prisma
+model User {
+  id         Int    @id @default(autoincrement())
+  name       String
+  referrerId Int?
+
+  referrer  User?  @relation("UserReferrals", fields: [referrerId], references: [id])
+  referrals User[] @relation("UserReferrals")
+}
+```
+
+### Many-to-Many Self Relation
+
+```prisma
+model User {
+  id        Int    @id @default(autoincrement())
+  name      String
+  following User[] @relation("UserFollows")
+  followers User[] @relation("UserFollows")
+}
+```
+
+## Multiple Relations Between Same Models
+
+Use relation names to distinguish multiple relations:
+
+```prisma
+model User {
+  id                Int     @id @default(autoincrement())
+  sentMessages      Message[] @relation("sender")
+  receivedMessages  Message[] @relation("recipient")
+}
+
+model Message {
+  id          Int    @id @default(autoincrement())
+  content     String
+  senderId    Int
+  recipientId Int
+
+  sender    User @relation("sender", fields: [senderId], references: [id])
+  recipient User @relation("recipient", fields: [recipientId], references: [id])
+}
+```
+
+## Composite Foreign Keys
+
+Relations can use composite keys:
+
+```prisma
+model Course {
+  id         Int
+  semester   String
+  name       String
+  enrollments CourseEnrollment[]
+
+  @@id([id, semester])
+}
+
+model User {
+  id          Int                  @id @default(autoincrement())
+  enrollments CourseEnrollment[]
+}
+
+model CourseEnrollment {
+  userId     Int
+  courseId   Int
+  semester   String
+  grade      String?
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId, semester], references: [id, semester])
+
+  @@id([userId, courseId, semester])
+}
+```
+
+## Complete Examples
+
+### Blog Platform
+
+```prisma
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String?
+  posts     Post[]
+  comments  Comment[]
+  profile   Profile?
+}
+
+model Profile {
+  id       Int     @id @default(autoincrement())
+  bio      String?
+  website  String?
+  userId   Int     @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        Int       @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean   @default(false)
+  authorId  Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  tags     TagOnPost[]
+
+  @@index([authorId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  postId    Int
+  authorId  Int
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+}
+
+model Tag {
+  id    Int         @id @default(autoincrement())
+  name  String      @unique
+  posts TagOnPost[]
+}
+
+model TagOnPost {
+  postId Int
+  tagId  Int
+  assignedAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+```
+
+### Social Network
+
+```prisma
+model User {
+  id                   Int            @id @default(autoincrement())
+  username             String         @unique
+  email                String         @unique
+  sentMessages         Message[]      @relation("sender")
+  receivedMessages     Message[]      @relation("recipient")
+  following            Follow[]       @relation("follower")
+  followers            Follow[]       @relation("following")
+  sentFriendRequests   FriendRequest[] @relation("requester")
+  receivedFriendRequests FriendRequest[] @relation("recipient")
+}
+
+model Follow {
+  followerId  Int
+  followingId Int
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model Message {
+  id          Int      @id @default(autoincrement())
+  content     String
+  senderId    Int
+  recipientId Int
+  createdAt   DateTime @default(now())
+  read        Boolean  @default(false)
+
+  sender    User @relation("sender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([recipientId])
+}
+
+model FriendRequest {
+  requesterId Int
+  recipientId Int
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+
+  requester User @relation("requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient User @relation("recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@id([requesterId, recipientId])
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+```
+
+### E-commerce
+
+```prisma
+model Customer {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  orders    Order[]
+  cart      Cart?
+  addresses Address[]
+}
+
+model Product {
+  id          Int            @id @default(autoincrement())
+  name        String
+  price       Decimal        @db.Decimal(10, 2)
+  stock       Int
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+  categories  ProductCategory[]
+}
+
+model Category {
+  id       Int               @id @default(autoincrement())
+  name     String            @unique
+  products ProductCategory[]
+}
+
+model ProductCategory {
+  productId  Int
+  categoryId Int
+
+  product  Product  @relation(fields: [productId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([productId, categoryId])
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  customerId Int
+  status     OrderStatus @default(PENDING)
+  total      Decimal     @db.Decimal(10, 2)
+  createdAt  DateTime    @default(now())
+
+  customer Customer    @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+  shipping Address     @relation(fields: [shippingId], references: [id])
+  shippingId Int
+
+  @@index([customerId])
+}
+
+model OrderItem {
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([orderId, productId])
+}
+
+model Cart {
+  id         Int        @id @default(autoincrement())
+  customerId Int        @unique
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+}
+
+model CartItem {
+  cartId    Int
+  productId Int
+  quantity  Int
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([cartId, productId])
+}
+
+model Address {
+  id         Int      @id @default(autoincrement())
+  street     String
+  city       String
+  country    String
+  postalCode String
+  customerId Int
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@index([customerId])
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+```
+
+## Best Practices
+
+1. Always define both sides of a relation
+2. Use meaningful relation names for multiple relations between the same models
+3. Add appropriate referential actions (`onDelete`, `onUpdate`)
+4. Use `Cascade` carefully - it permanently deletes related data
+5. Index foreign key fields for better query performance
+6. Use explicit many-to-many when you need extra fields on the relation
+7. Consider using self-relations for hierarchical or network data
+8. Use composite keys when business logic requires it
+9. Name your relations clearly when you have multiple relations
+10. Document complex relation logic with comments

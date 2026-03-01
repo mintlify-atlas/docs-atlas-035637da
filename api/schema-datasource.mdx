@@ -1,0 +1,119 @@
+---
+title: 'Datasource Block'
+description: 'Configure database connections and settings using the datasource block in your Prisma schema.'
+---
+
+## Overview
+
+The `datasource` block defines the database connection configuration for your Prisma schema. Each Prisma schema requires exactly one datasource block.
+
+## Basic Syntax
+
+```prisma
+datasource db {
+  provider = "postgresql"
+}
+```
+
+## Supported Providers
+
+Prisma supports the following database providers:
+
+### PostgreSQL
+
+```prisma
+datasource db {
+  provider = "postgresql"
+}
+```
+
+### MySQL
+
+```prisma
+datasource db {
+  provider = "mysql"
+}
+```
+
+### SQLite
+
+```prisma
+datasource db {
+  provider = "sqlite"
+}
+```
+
+### SQL Server
+
+```prisma
+datasource db {
+  provider = "sqlserver"
+}
+```
+
+### MongoDB
+
+```prisma
+datasource db {
+  provider = "mongodb"
+}
+```
+
+### CockroachDB
+
+```prisma
+datasource db {
+  provider = "cockroachdb"
+}
+```
+
+## Provider Extensions
+
+PostgreSQL supports database extensions that can be enabled in your schema:
+
+```prisma
+datasource db {
+  provider   = "postgresql"
+  extensions = [citext, postgis]
+}
+```
+
+Common PostgreSQL extensions:
+- `citext` - Case-insensitive text type
+- `postgis` - Geographic objects support
+- `uuid-ossp` - UUID generation functions
+- `pgcrypto` - Cryptographic functions
+
+## Naming Conventions
+
+The datasource block requires:
+- A unique name identifier (commonly `db`)
+- The `provider` field specifying the database type
+
+```prisma
+datasource myDatabase {
+  provider = "postgresql"
+}
+```
+
+## Multiple Database Support
+
+While Prisma schemas typically use a single datasource, you can reference it consistently throughout your models:
+
+```prisma
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+}
+```
+
+## Best Practices
+
+1. Use descriptive names for your datasource (typically `db` or `database`)
+2. Choose the provider that matches your production database
+3. Enable only necessary PostgreSQL extensions
+4. Keep datasource configuration in your schema file for version control

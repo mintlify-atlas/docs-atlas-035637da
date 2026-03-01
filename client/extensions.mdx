@@ -1,0 +1,648 @@
+---
+title: Client Extensions
+description: Extend Prisma Client with custom methods, computed fields, and query modifications
+---
+
+# Client Extensions
+
+Client extensions allow you to add custom functionality to Prisma Client in a type-safe way.
+
+## What are Extensions?
+
+Extensions let you:
+- Add custom model methods
+- Add custom client methods
+- Add computed fields to results
+- Modify queries before execution
+- Transform results after execution
+
+## Creating Extensions
+
+Use `$extends()` to create an extended client:
+
+```typescript
+const prisma = new PrismaClient()
+
+const xprisma = prisma.$extends({
+  // Extension configuration
+})
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/extensions/$extends.ts:8-20`
+
+## Extension Types
+
+### Model Extensions
+
+Add custom methods to specific models:
+
+```typescript
+const xprisma = prisma.$extends({
+  model: {
+    user: {
+      // Custom method
+      async findByEmail(email: string) {
+        return this.findUnique({
+          where: { email }
+        })
+      },
+      
+      // Method with multiple operations
+      async signUp(email: string, password: string) {
+        const hashedPassword = await hash(password)
+        return this.create({
+          data: {
+            email,
+            password: hashedPassword,
+            createdAt: new Date()
+          }
+        })
+      }
+    }
+  }
+})
+
+// Usage
+const user = await xprisma.user.findByEmail('alice@example.com')
+const newUser = await xprisma.user.signUp('bob@example.com', 'password123')
+```
+
+**`this` context:**
+
+Inside model methods, `this` refers to the model:
+
+```typescript
+const xprisma = prisma.$extends({
+  model: {
+    user: {
+      async deleteWithPosts(userId: string) {
+        // Delete posts first
+        await this.findUnique({ where: { id: userId } })
+          .posts()
+          .deleteMany()
+        
+        // Then delete user
+        return this.delete({ where: { id: userId } })
+      }
+    }
+  }
+})
+```
+
+### Client Extensions
+
+Add methods to the client itself:
+
+```typescript
+const xprisma = prisma.$extends({
+  client: {
+    // Utility method
+    async createDemoData() {
+      await this.user.create({
+        data: {
+          email: 'demo@example.com',
+          name: 'Demo User'
+        }
+      })
+      
+      await this.post.create({
+        data: {
+          title: 'Demo Post',
+          published: true
+        }
+      })
+    },
+    
+    // Health check
+    async health() {
+      try {
+        await this.$queryRaw`SELECT 1`
+        return { status: 'ok' }
+      } catch (error) {
+        return { status: 'error', error }
+      }
+    }
+  }
+})
+
+// Usage
+await xprisma.createDemoData()
+const health = await xprisma.health()
+```
+
+### Query Extensions
+
+Modify queries before they execute:
+
+```typescript
+const xprisma = prisma.$extends({
+  query: {
+    // Apply to all models
+    $allModels: {
+      // Apply to all queries
+      async $allOperations({ model, operation, args, query }) {
+        console.log('Query:', model, operation)
+        return query(args)
+      }
+    },
+    
+    // Apply to specific model
+    user: {
+      // Apply to specific operation
+      async findMany({ args, query }) {
+        // Auto-exclude deleted users
+        args.where = {
+          ...args.where,
+          deletedAt: null
+        }
+        return query(args)
+      }
+    }
+  }
+})
+```
+
+**Query extension parameters:**
+
+```typescript
+type QueryExtensionParams = {
+  model: string       // Model name
+  operation: string   // Operation (findMany, create, etc.)
+  args: any          // Query arguments
+  query: Function    // Function to execute the query
+}
+```
+
+**Modify all operations:**
+
+```typescript
+const xprisma = prisma.$extends({
+  query: {
+    user: {
+      async $allOperations({ operation, args, query }) {
+        const start = Date.now()
+        const result = await query(args)
+        console.log(`user.${operation} took ${Date.now() - start}ms`)
+        return result
+      }
+    }
+  }
+})
+```
+
+### Result Extensions
+
+Add computed fields to query results:
+
+```typescript
+const xprisma = prisma.$extends({
+  result: {
+    user: {
+      // Computed field
+      fullName: {
+        // Specify which fields are needed
+        needs: { firstName: true, lastName: true },
+        compute(user) {
+          return `${user.firstName} ${user.lastName}`
+        }
+      },
+      
+      // Another computed field
+      isAdult: {
+        needs: { age: true },
+        compute(user) {
+          return user.age >= 18
+        }
+      }
+    }
+  }
+})
+
+// Usage
+const user = await xprisma.user.findUnique({
+  where: { id: '123' }
+})
+
+console.log(user.fullName)  // "Alice Smith"
+console.log(user.isAdult)   // true
+```
+
+**Result extensions only compute when needed fields are selected:**
+
+```typescript
+// fullName available (firstName and lastName selected)
+const user = await xprisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    firstName: true,
+    lastName: true
+  }
+})
+console.log(user.fullName)  // Works
+
+// fullName NOT available (missing lastName)
+const user = await xprisma.user.findUnique({
+  where: { id: '123' },
+  select: {
+    firstName: true
+  }
+})
+console.log(user.fullName)  // undefined
+```
+
+## Combining Extensions
+
+Extensions can include multiple types:
+
+```typescript
+const xprisma = prisma.$extends({
+  model: {
+    user: {
+      async findByEmail(email: string) {
+        return this.findUnique({ where: { email } })
+      }
+    }
+  },
+  
+  query: {
+    user: {
+      async findMany({ args, query }) {
+        args.where = { ...args.where, deletedAt: null }
+        return query(args)
+      }
+    }
+  },
+  
+  result: {
+    user: {
+      fullName: {
+        needs: { firstName: true, lastName: true },
+        compute(user) {
+          return `${user.firstName} ${user.lastName}`
+        }
+      }
+    }
+  },
+  
+  client: {
+    async health() {
+      try {
+        await this.$queryRaw`SELECT 1`
+        return { status: 'ok' }
+      } catch (error) {
+        return { status: 'error' }
+      }
+    }
+  }
+})
+```
+
+## Chaining Extensions
+
+Extensions can be chained:
+
+```typescript
+const xprisma = prisma
+  .$extends(softDeleteExtension)
+  .$extends(auditLogExtension)
+  .$extends(cachingExtension)
+
+// Each extension builds on the previous
+```
+
+## Defining Reusable Extensions
+
+Create reusable extension functions:
+
+```typescript
+import { Prisma } from '@prisma/client'
+
+function createSoftDeleteExtension() {
+  return Prisma.defineExtension({
+    query: {
+      $allModels: {
+        async delete({ model, args, query }) {
+          // Convert delete to update
+          return (prisma[model] as any).update({
+            ...args,
+            data: { deletedAt: new Date() }
+          })
+        },
+        
+        async findMany({ args, query }) {
+          args.where = { ...args.where, deletedAt: null }
+          return query(args)
+        }
+      }
+    }
+  })
+}
+
+// Use it
+const xprisma = prisma.$extends(createSoftDeleteExtension())
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/extensions/defineExtension.ts:4-10`
+
+**Parameterized extensions:**
+
+```typescript
+function createAuditExtension(userId: string) {
+  return Prisma.defineExtension({
+    query: {
+      $allModels: {
+        async create({ args, query }) {
+          args.data = {
+            ...args.data,
+            createdBy: userId,
+            createdAt: new Date()
+          }
+          return query(args)
+        }
+      }
+    }
+  })
+}
+
+const xprisma = prisma.$extends(createAuditExtension(currentUserId))
+```
+
+## Extension Context
+
+Access extension context information:
+
+```typescript
+import { Prisma } from '@prisma/client'
+
+const xprisma = prisma.$extends({
+  model: {
+    $allModels: {
+      async log<T>(this: T, message: string) {
+        const context = Prisma.getExtensionContext(this)
+        console.log(`[${context.name}] ${message}`)
+      }
+    }
+  }
+})
+
+await xprisma.user.log('Starting operation')  // [user] Starting operation
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/extensions/getExtensionContext.ts`
+
+## Practical Examples
+
+### Soft Delete Extension
+
+```typescript
+const softDeleteExtension = Prisma.defineExtension({
+  query: {
+    $allModels: {
+      async delete({ model, args }) {
+        return (prisma[model] as any).update({
+          ...args,
+          data: { deletedAt: new Date() }
+        })
+      },
+      
+      async deleteMany({ model, args }) {
+        return (prisma[model] as any).updateMany({
+          ...args,
+          data: { deletedAt: new Date() }
+        })
+      },
+      
+      async findUnique({ args, query }) {
+        args.where = { ...args.where, deletedAt: null }
+        return query(args)
+      },
+      
+      async findMany({ args, query }) {
+        args.where = { ...args.where, deletedAt: null }
+        return query(args)
+      }
+    }
+  },
+  
+  model: {
+    $allModels: {
+      async restore<T>(this: T, where: any) {
+        const context = Prisma.getExtensionContext(this)
+        return (prisma[context.name] as any).update({
+          where,
+          data: { deletedAt: null }
+        })
+      }
+    }
+  }
+})
+
+const xprisma = prisma.$extends(softDeleteExtension)
+
+// Soft delete
+await xprisma.user.delete({ where: { id: '123' } })
+
+// Restore
+await xprisma.user.restore({ id: '123' })
+```
+
+### Pagination Extension
+
+```typescript
+const paginationExtension = Prisma.defineExtension({
+  model: {
+    $allModels: {
+      async paginate<T>(this: T, args: any, page: number, pageSize: number) {
+        const context = Prisma.getExtensionContext(this)
+        
+        const [items, total] = await prisma.$transaction([
+          (prisma[context.name] as any).findMany({
+            ...args,
+            skip: (page - 1) * pageSize,
+            take: pageSize
+          }),
+          (prisma[context.name] as any).count({ where: args.where })
+        ])
+        
+        return {
+          items,
+          total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize)
+        }
+      }
+    }
+  }
+})
+
+const xprisma = prisma.$extends(paginationExtension)
+
+const result = await xprisma.user.paginate(
+  { where: { active: true } },
+  1,  // page
+  20  // page size
+)
+
+console.log(result.items)       // User[]
+console.log(result.total)       // 150
+console.log(result.totalPages)  // 8
+```
+
+### JSON Field Extension
+
+```typescript
+const jsonExtension = Prisma.defineExtension({
+  result: {
+    user: {
+      metadata: {
+        needs: { metadataJson: true },
+        compute(user) {
+          return JSON.parse(user.metadataJson)
+        }
+      }
+    }
+  },
+  
+  query: {
+    user: {
+      async create({ args, query }) {
+        if (args.data.metadata) {
+          args.data.metadataJson = JSON.stringify(args.data.metadata)
+          delete args.data.metadata
+        }
+        return query(args)
+      },
+      
+      async update({ args, query }) {
+        if (args.data.metadata) {
+          args.data.metadataJson = JSON.stringify(args.data.metadata)
+          delete args.data.metadata
+        }
+        return query(args)
+      }
+    }
+  }
+})
+```
+
+### Audit Log Extension
+
+```typescript
+function createAuditExtension(userId: string) {
+  return Prisma.defineExtension({
+    query: {
+      $allModels: {
+        async create({ model, args, query }) {
+          const result = await query(args)
+          
+          await prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'CREATE',
+              model,
+              recordId: result.id,
+              timestamp: new Date()
+            }
+          })
+          
+          return result
+        },
+        
+        async update({ model, args, query }) {
+          const result = await query(args)
+          
+          await prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'UPDATE',
+              model,
+              recordId: args.where.id,
+              timestamp: new Date()
+            }
+          })
+          
+          return result
+        }
+      }
+    }
+  })
+}
+```
+
+## Extensions vs Middleware
+
+**Use extensions when:**
+- Adding custom methods to models or client
+- Adding computed fields to results
+- Need type-safe APIs
+- Want to compose functionality
+- Need model-specific behavior
+
+**Use middleware when:**
+- Intercepting ALL queries globally
+- Order of execution is critical
+- Need access to low-level query params
+- Simple logging or monitoring
+
+See [Middleware](/client/middleware) for comparison.
+
+## Limitations
+
+### No Access to Original Client
+
+Extensions receive a modified client, not the original:
+
+```typescript
+const xprisma = prisma.$extends({
+  model: {
+    user: {
+      async example() {
+        // `this` is the extended model, not original
+        return this.findMany()  // Uses extended client
+      }
+    }
+  }
+})
+```
+
+### Result Extensions Require Fields
+
+Computed fields only work when needed fields are selected:
+
+```typescript
+const xprisma = prisma.$extends({
+  result: {
+    user: {
+      fullName: {
+        needs: { firstName: true, lastName: true },
+        compute(user) {
+          return `${user.firstName} ${user.lastName}`
+        }
+      }
+    }
+  }
+})
+
+// ❌ fullName not available
+const user = await xprisma.user.findUnique({
+  where: { id: '123' },
+  select: { email: true }  // Missing firstName, lastName
+})
+
+// ✓ fullName available
+const user = await xprisma.user.findUnique({
+  where: { id: '123' }  // All fields selected by default
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Middleware" icon="layer-group" href="/client/middleware">
+    Compare with middleware approach
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/client/error-handling">
+    Handle errors in extensions
+  </Card>
+</CardGroup>

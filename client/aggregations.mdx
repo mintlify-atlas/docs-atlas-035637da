@@ -1,0 +1,504 @@
+---
+title: Aggregations
+description: Count, aggregate, and group data with Prisma Client
+---
+
+# Aggregations
+
+Prisma Client provides powerful aggregation capabilities to compute values across your data.
+
+## count()
+
+Count the number of records:
+
+### Basic Count
+
+```typescript
+// Count all users
+const count = await prisma.user.count()
+console.log(count)  // 42
+```
+
+### Filtered Count
+
+```typescript
+// Count users matching criteria
+const count = await prisma.user.count({
+  where: {
+    verified: true,
+    age: { gte: 18 }
+  }
+})
+```
+
+### Count by Field
+
+```typescript
+const result = await prisma.user.count({
+  select: {
+    _all: true,      // Total count
+    email: true,     // Non-null email count
+    name: true       // Non-null name count
+  }
+})
+
+// Result: { _all: 100, email: 98, name: 95 }
+```
+
+**How it works:**
+
+The `count()` method is a convenience wrapper around `aggregate()`. It desugars your query into an aggregation operation.
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/core/model/aggregates/count.ts:12-48`
+
+### Count Relations
+
+See [Relations - Relation Count](/client/relations#relation-count) for counting related records.
+
+## aggregate()
+
+Perform aggregations like sum, average, min, and max:
+
+### Available Aggregations
+
+```typescript
+const result = await prisma.user.aggregate({
+  _count: {
+    _all: true,        // Count all records
+    id: true,          // Count non-null id values
+    email: true        // Count non-null email values
+  },
+  _sum: {
+    age: true,         // Sum of all ages
+    credit: true       // Sum of all credits
+  },
+  _avg: {
+    age: true,         // Average age
+    credit: true       // Average credit
+  },
+  _min: {
+    age: true,         // Minimum age
+    createdAt: true    // Earliest creation date
+  },
+  _max: {
+    age: true,         // Maximum age
+    createdAt: true    // Latest creation date
+  }
+})
+
+// Result:
+// {
+//   _count: { _all: 100, id: 100, email: 98 },
+//   _sum: { age: 3250, credit: 15420.50 },
+//   _avg: { age: 32.5, credit: 157.35 },
+//   _min: { age: 18, createdAt: 2020-01-01T00:00:00.000Z },
+//   _max: { age: 85, createdAt: 2024-12-31T23:59:59.999Z }
+// }
+```
+
+### Filtered Aggregations
+
+```typescript
+const result = await prisma.user.aggregate({
+  where: {
+    verified: true
+  },
+  _avg: {
+    age: true
+  },
+  _sum: {
+    credit: true
+  }
+})
+```
+
+### Aggregation Types
+
+<ParamField path="_count" type="object">
+  Count records or non-null values
+  
+  ```typescript
+  _count: {
+    _all: true,   // Total records
+    email: true   // Non-null emails
+  }
+  ```
+</ParamField>
+
+<ParamField path="_sum" type="object">
+  Sum numeric fields
+  
+  ```typescript
+  _sum: {
+    age: true,
+    credit: true
+  }
+  ```
+  
+  Returns `null` if no records match.
+</ParamField>
+
+<ParamField path="_avg" type="object">
+  Average of numeric fields
+  
+  ```typescript
+  _avg: {
+    age: true,
+    score: true
+  }
+  ```
+  
+  Returns `null` if no records match.
+</ParamField>
+
+<ParamField path="_min" type="object">
+  Minimum value (works with numbers, dates, strings)
+  
+  ```typescript
+  _min: {
+    age: true,
+    createdAt: true,
+    name: true  // Alphabetically first
+  }
+  ```
+</ParamField>
+
+<ParamField path="_max" type="object">
+  Maximum value (works with numbers, dates, strings)
+  
+  ```typescript
+  _max: {
+    age: true,
+    createdAt: true,
+    name: true  // Alphabetically last
+  }
+  ```
+</ParamField>
+
+## groupBy()
+
+Group records and compute aggregations per group:
+
+### Basic Grouping
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: {
+    _all: true
+  }
+})
+
+// Result:
+// [
+//   { country: 'US', _count: { _all: 45 } },
+//   { country: 'UK', _count: { _all: 23 } },
+//   { country: 'CA', _count: { _all: 12 } }
+// ]
+```
+
+### Multiple Group Fields
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country', 'verified'],
+  _count: {
+    _all: true
+  },
+  orderBy: {
+    country: 'asc'
+  }
+})
+
+// Result:
+// [
+//   { country: 'US', verified: true, _count: { _all: 40 } },
+//   { country: 'US', verified: false, _count: { _all: 5 } },
+//   { country: 'UK', verified: true, _count: { _all: 20 } },
+//   ...
+// ]
+```
+
+### Aggregations per Group
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: {
+    _all: true
+  },
+  _sum: {
+    credit: true
+  },
+  _avg: {
+    age: true
+  },
+  _min: {
+    age: true
+  },
+  _max: {
+    age: true
+  }
+})
+
+// Result:
+// [
+//   {
+//     country: 'US',
+//     _count: { _all: 45 },
+//     _sum: { credit: 12500.50 },
+//     _avg: { age: 34.2 },
+//     _min: { age: 18 },
+//     _max: { age: 72 }
+//   },
+//   ...
+// ]
+```
+
+### Filter Before Grouping (where)
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  where: {
+    verified: true,      // Filter before grouping
+    age: { gte: 18 }
+  },
+  _count: {
+    _all: true
+  }
+})
+```
+
+### Filter After Grouping (having)
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: {
+    _all: true
+  },
+  having: {
+    age: {
+      _avg: { gt: 30 }    // Only groups with avg age > 30
+    }
+  }
+})
+
+// Groups with more than 10 users
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: {
+    _all: true
+  },
+  having: {
+    _count: {
+      _all: { gt: 10 }
+    }
+  }
+})
+```
+
+### Sort Groups
+
+```typescript
+// Sort by grouped field
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: { _all: true },
+  orderBy: {
+    country: 'asc'
+  }
+})
+
+// Sort by aggregation
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: { _all: true },
+  orderBy: {
+    _count: {
+      _all: 'desc'       // Most users first
+    }
+  }
+})
+
+// Multiple sort fields
+const result = await prisma.user.groupBy({
+  by: ['country', 'verified'],
+  _avg: { age: true },
+  orderBy: [
+    { country: 'asc' },
+    { _avg: { age: 'desc' } }
+  ]
+})
+```
+
+### Paginate Groups
+
+```typescript
+const result = await prisma.user.groupBy({
+  by: ['country'],
+  _count: { _all: true },
+  skip: 10,
+  take: 10
+})
+```
+
+## Practical Examples
+
+### Top Users by Post Count
+
+```typescript
+const topUsers = await prisma.post.groupBy({
+  by: ['authorId'],
+  _count: {
+    id: true
+  },
+  orderBy: {
+    _count: {
+      id: 'desc'
+    }
+  },
+  take: 10
+})
+
+// Get user details
+const userIds = topUsers.map(g => g.authorId)
+const users = await prisma.user.findMany({
+  where: { id: { in: userIds } }
+})
+```
+
+### Daily Signups
+
+```typescript
+const signups = await prisma.user.groupBy({
+  by: ['createdAt'],  // Assuming date field
+  _count: {
+    _all: true
+  },
+  orderBy: {
+    createdAt: 'desc'
+  }
+})
+```
+
+For date truncation (e.g., group by day/month), you may need raw queries.
+
+### Average Order Value by Customer
+
+```typescript
+const avgOrderValue = await prisma.order.groupBy({
+  by: ['customerId'],
+  _avg: {
+    total: true
+  },
+  _count: {
+    _all: true
+  },
+  having: {
+    _count: {
+      _all: { gte: 5 }  // Customers with 5+ orders
+    }
+  }
+})
+```
+
+### Product Sales by Category
+
+```typescript
+const salesByCategory = await prisma.orderItem.groupBy({
+  by: ['productId'],
+  _sum: {
+    quantity: true,
+    subtotal: true
+  },
+  orderBy: {
+    _sum: {
+      subtotal: 'desc'
+    }
+  }
+})
+```
+
+## MongoDB-Specific Aggregations
+
+MongoDB provides `aggregateRaw()` for pipeline aggregations:
+
+```typescript
+const result = await prisma.user.aggregateRaw({
+  pipeline: [
+    { $match: { age: { $gte: 18 } } },
+    { $group: {
+      _id: '$country',
+      count: { $sum: 1 },
+      avgAge: { $avg: '$age' }
+    }},
+    { $sort: { count: -1 } }
+  ]
+})
+```
+
+Source: `/home/daytona/workspace/source/packages/client/tests/functional/0-legacy-ports/aggregate-raw/tests.ts:45-83`
+
+## Limitations
+
+### Field Types
+
+- `_sum` and `_avg`: Only numeric fields (`Int`, `Float`, `Decimal`)
+- `_min` and `_max`: Numeric, date, and string fields
+- `_count`: All fields
+
+### Null Handling
+
+```typescript
+// Null values are excluded from aggregations (except _count._all)
+const result = await prisma.user.aggregate({
+  _avg: { age: true }  // Ignores users with null age
+})
+
+// Count non-null values
+const result = await prisma.user.aggregate({
+  _count: { age: true }  // Count users with non-null age
+})
+
+// Count all records including nulls
+const result = await prisma.user.aggregate({
+  _count: { _all: true }
+})
+```
+
+### Performance
+
+- Aggregations scan the entire result set
+- Use `where` to filter before aggregating
+- Add indexes on grouped fields and filtered fields
+- For large datasets, consider:
+  - Materialized views
+  - Pre-computed aggregations
+  - Database-specific optimizations
+
+## Combining with Transactions
+
+```typescript
+const [totalUsers, verifiedCount, avgAge] = await prisma.$transaction([
+  prisma.user.count(),
+  prisma.user.count({ where: { verified: true } }),
+  prisma.user.aggregate({
+    _avg: { age: true }
+  })
+])
+
+console.log(`${verifiedCount}/${totalUsers} verified (avg age: ${avgAge._avg.age})`)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transactions" icon="arrows-rotate" href="/client/transactions">
+    Ensure data consistency with transactions
+  </Card>
+  <Card title="Filtering & Sorting" icon="filter" href="/client/filtering-sorting">
+    Advanced where clauses for aggregations
+  </Card>
+</CardGroup>

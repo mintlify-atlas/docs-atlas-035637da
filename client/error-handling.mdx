@@ -1,0 +1,583 @@
+---
+title: Error Handling
+description: Error types and handling strategies in Prisma Client
+---
+
+# Error Handling
+
+Prisma Client throws specific error types that help you handle different failure scenarios.
+
+## Error Types
+
+Prisma Client provides five error classes:
+
+### PrismaClientKnownRequestError
+
+Database errors with known error codes:
+
+```typescript
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+try {
+  await prisma.user.create({
+    data: {
+      email: 'duplicate@example.com'
+    }
+  })
+} catch (error) {
+  if (error instanceof PrismaClientKnownRequestError) {
+    console.log('Error code:', error.code)
+    console.log('Meta:', error.meta)
+    console.log('Message:', error.message)
+  }
+}
+```
+
+**Properties:**
+
+<ParamField path="code" type="string">
+  Error code (e.g., `P2002` for unique constraint violation)
+</ParamField>
+
+<ParamField path="meta" type="object">
+  Additional error metadata (constraint name, field names, etc.)
+</ParamField>
+
+<ParamField path="clientVersion" type="string">
+  Prisma Client version
+</ParamField>
+
+<ParamField path="batchRequestIdx" type="number">
+  Index of failed operation in batch transaction (if applicable)
+</ParamField>
+
+Source: `/home/daytona/workspace/source/packages/client-runtime-utils/src/errors/PrismaClientKnownRequestError.ts:11-33`
+
+### PrismaClientUnknownRequestError
+
+Database errors without a known error code:
+
+```typescript
+import { PrismaClientUnknownRequestError } from '@prisma/client/runtime/library'
+
+try {
+  await prisma.$queryRaw`INVALID SQL`
+} catch (error) {
+  if (error instanceof PrismaClientUnknownRequestError) {
+    console.log('Unknown error:', error.message)
+  }
+}
+```
+
+### PrismaClientValidationError
+
+Invalid Prisma Client API usage:
+
+```typescript
+import { PrismaClientValidationError } from '@prisma/client/runtime/library'
+
+try {
+  await prisma.user.create({
+    data: {
+      // Missing required field
+    }
+  })
+} catch (error) {
+  if (error instanceof PrismaClientValidationError) {
+    console.log('Validation error:', error.message)
+  }
+}
+```
+
+**Common causes:**
+- Missing required fields
+- Invalid field types
+- Invalid query structure
+- Wrong method arguments
+
+### PrismaClientRustPanicError
+
+Unexpected panic in the query compiler:
+
+```typescript
+import { PrismaClientRustPanicError } from '@prisma/client/runtime/library'
+
+try {
+  await prisma.user.findMany()
+} catch (error) {
+  if (error instanceof PrismaClientRustPanicError) {
+    console.error('Rust panic:', error.message)
+    // This is usually a bug - please report it
+  }
+}
+```
+
+### PrismaClientInitializationError
+
+Errors during client initialization:
+
+```typescript
+import { PrismaClientInitializationError } from '@prisma/client/runtime/library'
+
+try {
+  const prisma = new PrismaClient({
+    adapter: invalidAdapter
+  })
+  await prisma.$connect()
+} catch (error) {
+  if (error instanceof PrismaClientInitializationError) {
+    console.error('Initialization error:', error.message)
+  }
+}
+```
+
+**Common causes:**
+- Invalid adapter configuration
+- Database connection failures
+- Missing adapter or accelerateUrl
+- Invalid constructor options
+
+## Error Codes
+
+Known error codes in `PrismaClientKnownRequestError.code`:
+
+### Common Error Codes
+
+| Code | Description |
+|------|-------------|
+| `P2000` | Value too long for column |
+| `P2001` | Record not found |
+| `P2002` | Unique constraint violation |
+| `P2003` | Foreign key constraint violation |
+| `P2004` | Constraint violation |
+| `P2005` | Invalid value for field type |
+| `P2006` | Invalid value |
+| `P2007` | Data validation error |
+| `P2008` | Failed to parse query |
+| `P2009` | Failed to validate query |
+| `P2010` | Raw query failed |
+| `P2011` | Null constraint violation |
+| `P2012` | Missing required value |
+| `P2013` | Missing required argument |
+| `P2014` | Relation violation |
+| `P2015` | Related record not found |
+| `P2016` | Query interpretation error |
+| `P2017` | Records not connected |
+| `P2018` | Required connected records not found |
+| `P2019` | Input error |
+| `P2020` | Value out of range |
+| `P2021` | Table does not exist |
+| `P2022` | Column does not exist |
+| `P2023` | Inconsistent column data |
+| `P2024` | Connection timeout |
+| `P2025` | Record to update/delete not found |
+| `P2026` | Unsupported database feature |
+| `P2027` | Multiple errors occurred |
+| `P2028` | Transaction API error |
+| `P2029` | Query parameter limit exceeded |
+| `P2030` | Full-text search index not found |
+| `P2033` | Number out of range |
+| `P2034` | Transaction failed due to write conflict |
+
+## Handling Specific Errors
+
+### Unique Constraint Violation (P2002)
+
+```typescript
+try {
+  await prisma.user.create({
+    data: {
+      email: 'alice@example.com'
+    }
+  })
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  ) {
+    console.log('Email already exists')
+    console.log('Field:', error.meta?.target)  // ['email']
+  }
+}
+```
+
+### Record Not Found (P2025)
+
+```typescript
+try {
+  await prisma.user.update({
+    where: { id: 'nonexistent' },
+    data: { name: 'New Name' }
+  })
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2025'
+  ) {
+    console.log('User not found')
+  }
+}
+
+// Or use findUniqueOrThrow for explicit handling
+try {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: 'nonexistent' }
+  })
+} catch (error) {
+  if (error.code === 'P2025') {
+    console.log('User not found')
+  }
+}
+```
+
+### Foreign Key Constraint (P2003)
+
+```typescript
+try {
+  await prisma.post.create({
+    data: {
+      title: 'My Post',
+      authorId: 'nonexistent-user'
+    }
+  })
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2003'
+  ) {
+    console.log('Referenced user does not exist')
+    console.log('Field:', error.meta?.field_name)
+  }
+}
+```
+
+### Transaction Timeout (P2028)
+
+```typescript
+try {
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.user.create({ data: { email: 'alice@example.com' } })
+      await new Promise(resolve => setTimeout(resolve, 6000))
+    },
+    { timeout: 5000 }
+  )
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2028'
+  ) {
+    console.log('Transaction timeout')
+  }
+}
+```
+
+### Write Conflict (P2034)
+
+```typescript
+try {
+  await prisma.$transaction(
+    async (tx) => {
+      // Concurrent update conflict
+    },
+    { isolationLevel: 'Serializable' }
+  )
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2034'
+  ) {
+    console.log('Transaction write conflict - retry operation')
+  }
+}
+```
+
+## Error Handling Patterns
+
+### Type Guard Helper
+
+```typescript
+function isPrismaError(
+  error: unknown,
+  code: string
+): error is PrismaClientKnownRequestError {
+  return (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === code
+  )
+}
+
+// Usage
+try {
+  await prisma.user.create({ data: { email: 'alice@example.com' } })
+} catch (error) {
+  if (isPrismaError(error, 'P2002')) {
+    console.log('Unique constraint violation')
+  }
+}
+```
+
+### Centralized Error Handler
+
+```typescript
+function handlePrismaError(error: unknown) {
+  if (error instanceof PrismaClientKnownRequestError) {
+    switch (error.code) {
+      case 'P2002':
+        return { status: 409, message: 'Resource already exists' }
+      case 'P2025':
+        return { status: 404, message: 'Resource not found' }
+      case 'P2003':
+        return { status: 400, message: 'Invalid reference' }
+      case 'P2028':
+        return { status: 408, message: 'Request timeout' }
+      default:
+        return { status: 500, message: 'Database error' }
+    }
+  }
+  
+  if (error instanceof PrismaClientValidationError) {
+    return { status: 400, message: 'Invalid request' }
+  }
+  
+  return { status: 500, message: 'Internal server error' }
+}
+
+// Usage in API route
+app.post('/users', async (req, res) => {
+  try {
+    const user = await prisma.user.create({ data: req.body })
+    res.json(user)
+  } catch (error) {
+    const { status, message } = handlePrismaError(error)
+    res.status(status).json({ error: message })
+  }
+})
+```
+
+### Retry Logic
+
+```typescript
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation()
+    } catch (error) {
+      // Retry on write conflicts
+      if (
+        error instanceof PrismaClientKnownRequestError &&
+        error.code === 'P2034' &&
+        i < maxRetries - 1
+      ) {
+        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)))
+        continue
+      }
+      throw error
+    }
+  }
+  
+  throw new Error('Max retries exceeded')
+}
+
+// Usage
+const result = await withRetry(() =>
+  prisma.$transaction(async (tx) => {
+    // Transaction operations
+  }, { isolationLevel: 'Serializable' })
+)
+```
+
+### Graceful Degradation
+
+```typescript
+async function getUser(id: string) {
+  try {
+    return await prisma.user.findUniqueOrThrow({
+      where: { id }
+    })
+  } catch (error) {
+    if (
+      error instanceof PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      // Return default user instead of failing
+      return {
+        id,
+        email: 'unknown@example.com',
+        name: 'Unknown User'
+      }
+    }
+    throw error
+  }
+}
+```
+
+## Batch Transaction Errors
+
+Batch transactions report which operation failed:
+
+```typescript
+try {
+  await prisma.$transaction([
+    prisma.user.create({ data: { email: 'alice@example.com' } }),  // Index 0
+    prisma.user.create({ data: { email: 'alice@example.com' } }),  // Index 1 - fails
+    prisma.post.create({ data: { title: 'Hello' } })                // Index 2
+  ])
+} catch (error) {
+  if (error instanceof PrismaClientKnownRequestError) {
+    console.log('Failed at index:', error.batchRequestIdx)  // 1
+    console.log('Error code:', error.code)                   // P2002
+  }
+}
+```
+
+## Driver Adapter Errors
+
+Driver adapters map database-specific errors to Prisma error codes:
+
+```typescript
+// PostgreSQL unique violation -> P2002
+// MySQL duplicate entry -> P2002
+// SQLite UNIQUE constraint failed -> P2002
+
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  // Same error code across all databases
+  if (error.code === 'P2002') {
+    console.log('Unique constraint violation')
+  }
+}
+```
+
+Error mapping is handled by each driver adapter's error conversion logic.
+
+## Raw Query Errors
+
+Raw queries always return error code P2010:
+
+```typescript
+try {
+  await prisma.$queryRaw`INVALID SQL SYNTAX`
+} catch (error) {
+  if (
+    error instanceof PrismaClientKnownRequestError &&
+    error.code === 'P2010'
+  ) {
+    console.log('Raw query failed:', error.message)
+  }
+}
+```
+
+## Connection Errors
+
+```typescript
+try {
+  await prisma.$connect()
+} catch (error) {
+  if (error instanceof PrismaClientInitializationError) {
+    console.error('Failed to connect:', error.message)
+    
+    // Common causes:
+    // - Invalid connection string
+    // - Database server not running
+    // - Network issues
+    // - Invalid credentials
+  }
+}
+```
+
+## Best Practices
+
+### Always Handle Specific Errors
+
+```typescript
+// ❌ Bad: Generic catch
+try {
+  await prisma.user.create({ data: { email: 'alice@example.com' } })
+} catch (error) {
+  console.error('Error:', error)
+}
+
+// ✓ Good: Specific handling
+try {
+  await prisma.user.create({ data: { email: 'alice@example.com' } })
+} catch (error) {
+  if (error instanceof PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      // Handle duplicate
+    } else if (error.code === 'P2003') {
+      // Handle foreign key
+    }
+  }
+  throw error  // Re-throw unknown errors
+}
+```
+
+### Log Errors with Context
+
+```typescript
+try {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name: newName }
+  })
+} catch (error) {
+  console.error('Failed to update user:', {
+    userId,
+    newName,
+    error: error instanceof Error ? error.message : error,
+    code: error instanceof PrismaClientKnownRequestError ? error.code : undefined
+  })
+  throw error
+}
+```
+
+### Use Type Guards
+
+```typescript
+function isPrismaClientError(error: unknown): error is PrismaClientKnownRequestError {
+  return error instanceof PrismaClientKnownRequestError
+}
+
+try {
+  await prisma.user.create({ data: { email: 'alice@example.com' } })
+} catch (error) {
+  if (isPrismaClientError(error)) {
+    console.log('Prisma error:', error.code)
+  } else {
+    console.log('Unknown error:', error)
+  }
+}
+```
+
+### Test Error Scenarios
+
+```typescript
+// In your tests
+test('handles duplicate email', async () => {
+  await prisma.user.create({ data: { email: 'test@example.com' } })
+  
+  await expect(
+    prisma.user.create({ data: { email: 'test@example.com' } })
+  ).rejects.toMatchObject({
+    code: 'P2002'
+  })
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transactions" icon="arrows-rotate" href="/client/transactions">
+    Handle transaction-specific errors
+  </Card>
+  <Card title="Middleware" icon="layer-group" href="/client/middleware">
+    Intercept and handle errors globally
+  </Card>
+</CardGroup>

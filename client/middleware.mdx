@@ -1,0 +1,466 @@
+---
+title: Middleware
+description: Hook into the Prisma Client query execution pipeline
+---
+
+# Middleware
+
+Middleware allows you to intercept and modify queries before they're executed and results after they're returned.
+
+## What is Middleware?
+
+Middleware functions run in sequence for every query:
+
+```
+Query → Middleware 1 → Middleware 2 → ... → Database → ... → Middleware 2 → Middleware 1 → Result
+```
+
+Use cases:
+- Logging queries
+- Performance monitoring
+- Query modification
+- Result transformation
+- Access control
+- Caching
+
+## Basic Usage
+
+Middleware is registered using `$use()`:
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+prisma.$use(async (params, next) => {
+  // Log query
+  console.log('Query:', params.model, params.action)
+  
+  // Execute query
+  const result = await next(params)
+  
+  // Log result
+  console.log('Result:', result)
+  
+  return result
+})
+```
+
+## Middleware Parameters
+
+### params
+
+The `params` object contains query information:
+
+```typescript
+type QueryMiddlewareParams = {
+  model?: string          // Model name (e.g., 'User', 'Post')
+  action: string          // Operation (e.g., 'findMany', 'create')
+  args: any              // Query arguments
+  dataPath: string[]     // Path to nested data
+  runInTransaction: boolean  // Whether query runs in transaction
+}
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/QueryMiddlewareParams.ts:4-14`
+
+**Example:**
+
+```typescript
+prisma.$use(async (params, next) => {
+  console.log('Model:', params.model)        // 'User'
+  console.log('Action:', params.action)      // 'findMany'
+  console.log('Args:', params.args)          // { where: { ... } }
+  console.log('In TX:', params.runInTransaction)  // false
+  
+  return next(params)
+})
+
+await prisma.user.findMany({ where: { active: true } })
+```
+
+### next
+
+The `next` function executes the next middleware or the actual query:
+
+```typescript
+prisma.$use(async (params, next) => {
+  const start = Date.now()
+  
+  // Execute next middleware or query
+  const result = await next(params)
+  
+  const duration = Date.now() - start
+  console.log(`${params.model}.${params.action} took ${duration}ms`)
+  
+  return result
+})
+```
+
+## Modifying Queries
+
+### Modify Arguments
+
+```typescript
+// Auto-filter soft-deleted records
+prisma.$use(async (params, next) => {
+  if (params.model === 'Post' && params.action === 'findMany') {
+    // Add deletedAt filter
+    params.args.where = {
+      ...params.args.where,
+      deletedAt: null
+    }
+  }
+  
+  return next(params)
+})
+```
+
+### Modify Action
+
+```typescript
+// Convert delete to soft delete
+prisma.$use(async (params, next) => {
+  if (params.action === 'delete') {
+    // Change to update
+    params.action = 'update'
+    params.args = {
+      ...params.args,
+      data: {
+        deletedAt: new Date()
+      }
+    }
+  }
+  
+  return next(params)
+})
+```
+
+### Conditional Execution
+
+```typescript
+prisma.$use(async (params, next) => {
+  // Skip middleware for certain actions
+  if (params.action === 'findUnique') {
+    return next(params)
+  }
+  
+  // Apply logic for other actions
+  console.log('Query:', params.model, params.action)
+  return next(params)
+})
+```
+
+## Modifying Results
+
+### Transform Results
+
+```typescript
+// Hide sensitive fields
+prisma.$use(async (params, next) => {
+  const result = await next(params)
+  
+  if (params.model === 'User') {
+    if (Array.isArray(result)) {
+      return result.map(user => {
+        delete user.password
+        return user
+      })
+    } else if (result) {
+      delete result.password
+    }
+  }
+  
+  return result
+})
+```
+
+### Add Computed Fields
+
+```typescript
+prisma.$use(async (params, next) => {
+  const result = await next(params)
+  
+  if (params.model === 'User' && result) {
+    const addFullName = (user) => ({
+      ...user,
+      fullName: `${user.firstName} ${user.lastName}`
+    })
+    
+    return Array.isArray(result)
+      ? result.map(addFullName)
+      : addFullName(result)
+  }
+  
+  return result
+})
+```
+
+## Execution Order
+
+Middleware executes in registration order:
+
+```typescript
+prisma.$use(async (params, next) => {
+  console.log('Middleware 1: Before')
+  const result = await next(params)
+  console.log('Middleware 1: After')
+  return result
+})
+
+prisma.$use(async (params, next) => {
+  console.log('Middleware 2: Before')
+  const result = await next(params)
+  console.log('Middleware 2: After')
+  return result
+})
+
+await prisma.user.findMany()
+
+// Output:
+// Middleware 1: Before
+// Middleware 2: Before
+// [query executes]
+// Middleware 2: After
+// Middleware 1: After
+```
+
+## Common Patterns
+
+### Query Logging
+
+```typescript
+prisma.$use(async (params, next) => {
+  const start = Date.now()
+  const result = await next(params)
+  const duration = Date.now() - start
+  
+  console.log({
+    model: params.model,
+    action: params.action,
+    duration: `${duration}ms`,
+    timestamp: new Date().toISOString()
+  })
+  
+  return result
+})
+```
+
+### Performance Monitoring
+
+```typescript
+prisma.$use(async (params, next) => {
+  const start = Date.now()
+  const result = await next(params)
+  const duration = Date.now() - start
+  
+  if (duration > 1000) {
+    console.warn(`Slow query detected: ${params.model}.${params.action} (${duration}ms)`)
+  }
+  
+  // Send to monitoring service
+  await monitoring.recordQuery({
+    operation: `${params.model}.${params.action}`,
+    duration
+  })
+  
+  return result
+})
+```
+
+### Soft Delete
+
+```typescript
+prisma.$use(async (params, next) => {
+  // Intercept delete operations
+  if (params.action === 'delete') {
+    params.action = 'update'
+    params.args.data = { deletedAt: new Date() }
+  }
+  
+  if (params.action === 'deleteMany') {
+    params.action = 'updateMany'
+    params.args.data = { deletedAt: new Date() }
+  }
+  
+  // Auto-exclude soft-deleted records
+  if (params.action.startsWith('find')) {
+    params.args.where = {
+      ...params.args.where,
+      deletedAt: null
+    }
+  }
+  
+  return next(params)
+})
+```
+
+### Caching
+
+```typescript
+const cache = new Map()
+
+prisma.$use(async (params, next) => {
+  // Only cache read operations
+  if (!params.action.startsWith('find')) {
+    return next(params)
+  }
+  
+  const key = JSON.stringify({ model: params.model, action: params.action, args: params.args })
+  
+  // Check cache
+  if (cache.has(key)) {
+    console.log('Cache hit:', key)
+    return cache.get(key)
+  }
+  
+  // Execute query
+  const result = await next(params)
+  
+  // Store in cache
+  cache.set(key, result)
+  
+  // Invalidate after 60s
+  setTimeout(() => cache.delete(key), 60000)
+  
+  return result
+})
+```
+
+### Access Control
+
+```typescript
+function createAccessControlMiddleware(userId: string) {
+  return async (params, next) => {
+    // Ensure user can only access their own data
+    if (params.model === 'Post') {
+      if (params.action.startsWith('find')) {
+        params.args.where = {
+          ...params.args.where,
+          authorId: userId
+        }
+      } else if (['create', 'update', 'delete'].includes(params.action)) {
+        // Verify ownership before mutation
+        const post = await prisma.post.findUnique({
+          where: params.args.where,
+          select: { authorId: true }
+        })
+        
+        if (post?.authorId !== userId) {
+          throw new Error('Unauthorized')
+        }
+      }
+    }
+    
+    return next(params)
+  }
+}
+
+// Use with current user
+const userPrisma = prisma.$use(createAccessControlMiddleware(currentUserId))
+```
+
+## Middleware vs Extensions
+
+**Use middleware when:**
+- You need to intercept ALL queries
+- You want to modify behavior globally
+- Order of execution matters
+- You need to work with low-level query params
+
+**Use extensions when:**
+- You want to add custom methods
+- You need type-safe APIs
+- You want to extend specific models
+- You need to transform results with type safety
+
+See [Extensions](/client/extensions) for more details.
+
+## Limitations
+
+### Cannot Stop Execution
+
+You must call `next()`. You cannot prevent query execution:
+
+```typescript
+// ❌ This won't work
+prisma.$use(async (params, next) => {
+  if (params.action === 'deleteMany') {
+    throw new Error('Forbidden')  // Query still executes
+  }
+  return next(params)
+})
+
+// ✓ Validate before calling Prisma
+if (action === 'deleteAll') {
+  throw new Error('Forbidden')
+}
+await prisma.post.deleteMany()
+```
+
+### Async Only
+
+Middleware must be async functions:
+
+```typescript
+// ❌ Wrong
+prisma.$use((params, next) => {
+  console.log('Query')
+  return next(params)
+})
+
+// ✓ Correct
+prisma.$use(async (params, next) => {
+  console.log('Query')
+  return next(params)
+})
+```
+
+### Order Matters
+
+Middleware is executed in registration order. Register earlier for outer behavior:
+
+```typescript
+// Logging happens first
+prisma.$use(loggingMiddleware)
+prisma.$use(cachingMiddleware)
+
+// Caching happens first
+prisma.$use(cachingMiddleware)
+prisma.$use(loggingMiddleware)
+```
+
+## Migration from Query Middleware
+
+Query middleware (`$use`) replaced the older `$on('query')` event:
+
+```typescript
+// Old: Event listener (read-only)
+prisma.$on('query', (e) => {
+  console.log('Query:', e.query)
+  console.log('Duration:', e.duration)
+})
+
+// New: Middleware (can modify)
+prisma.$use(async (params, next) => {
+  const start = Date.now()
+  const result = await next(params)
+  const duration = Date.now() - start
+  
+  console.log('Query:', params.action, duration)
+  return result
+})
+```
+
+Both can coexist. Use `$on()` for read-only logging and `$use()` for modifications.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extensions" icon="puzzle-piece" href="/client/extensions">
+    Extend Prisma Client with custom methods
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/client/error-handling">
+    Handle errors in middleware
+  </Card>
+</CardGroup>

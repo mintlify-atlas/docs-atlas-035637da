@@ -1,0 +1,641 @@
+---
+title: Query Options
+description: Complete reference for query filtering, sorting, and selection options
+---
+
+# Query Options
+
+Prisma Client provides a rich set of query options for filtering, sorting, selecting fields, and more.
+
+## Selection Options
+
+### select
+
+Specify which fields to include in the query result.
+
+```typescript
+select?: {
+  [field: string]: boolean | NestedSelect
+}
+```
+
+**Example:**
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: 1 },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    posts: {
+      select: {
+        title: true,
+        published: true
+      }
+    }
+  }
+})
+// Result: { id: 1, email: '...', name: '...', posts: [...] }
+```
+
+<Note>
+  When using `select`, only the specified fields are returned. All other fields are excluded.
+</Note>
+
+---
+
+### include
+
+Include related records (relations) in the query result.
+
+```typescript
+include?: {
+  [relation: string]: boolean | NestedInclude
+}
+```
+
+**Example:**
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: 1 },
+  include: {
+    posts: true,
+    profile: {
+      include: {
+        bio: true
+      }
+    }
+  }
+})
+// Returns the user with all fields, plus posts and profile relations
+```
+
+<Note>
+  `select` and `include` are mutually exclusive at the same level, but you can use `select` within `include`.
+</Note>
+
+**Combining select within include:**
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: 1 },
+  include: {
+    posts: {
+      select: {
+        title: true,
+        published: true
+      }
+    }
+  }
+})
+```
+
+---
+
+### omit
+
+Exclude specific fields from the query result.
+
+```typescript
+omit?: {
+  [field: string]: boolean
+}
+```
+
+**Example:**
+```typescript
+const user = await prisma.user.findUnique({
+  where: { id: 1 },
+  omit: {
+    password: true,
+    internalNotes: true
+  }
+})
+// Returns all user fields except password and internalNotes
+```
+
+<Note>
+  `omit` can be used with `include`, but not with `select`.
+</Note>
+
+---
+
+## Filtering Options
+
+### where
+
+Filter records based on field values and conditions.
+
+```typescript
+where?: {
+  [field: string]: FieldValue | FilterCondition
+  AND?: WhereInput[]
+  OR?: WhereInput[]
+  NOT?: WhereInput | WhereInput[]
+}
+```
+
+#### Basic Filters
+
+**Equality:**
+```typescript
+where: {
+  email: 'alice@prisma.io',
+  age: 25
+}
+```
+
+**Comparison operators:**
+```typescript
+where: {
+  age: { gt: 18 },        // greater than
+  age: { gte: 18 },       // greater than or equal
+  age: { lt: 65 },        // less than
+  age: { lte: 65 },       // less than or equal
+  age: { not: 30 }        // not equal
+}
+```
+
+**List filters:**
+```typescript
+where: {
+  id: { in: [1, 2, 3, 4, 5] },
+  role: { notIn: ['ADMIN', 'MODERATOR'] }
+}
+```
+
+#### String Filters
+
+```typescript
+where: {
+  email: { contains: '@prisma.io' },
+  name: { startsWith: 'Al' },
+  name: { endsWith: 'ice' },
+  email: { equals: 'alice@prisma.io' },
+  bio: { not: { contains: 'banned' } }
+}
+```
+
+**Case-insensitive string filters:**
+```typescript
+where: {
+  email: {
+    contains: '@PRISMA.IO',
+    mode: 'insensitive'
+  }
+}
+```
+
+#### Logical Operators
+
+**AND (implicit):**
+```typescript
+where: {
+  age: { gte: 18 },
+  active: true
+}
+// Equivalent to: age >= 18 AND active = true
+```
+
+**AND (explicit):**
+```typescript
+where: {
+  AND: [
+    { age: { gte: 18 } },
+    { active: true }
+  ]
+}
+```
+
+**OR:**
+```typescript
+where: {
+  OR: [
+    { email: { contains: '@prisma.io' } },
+    { email: { contains: '@example.com' } }
+  ]
+}
+```
+
+**NOT:**
+```typescript
+where: {
+  NOT: {
+    role: 'ADMIN'
+  }
+}
+
+// Multiple NOT conditions
+where: {
+  NOT: [
+    { role: 'ADMIN' },
+    { role: 'MODERATOR' }
+  ]
+}
+```
+
+**Complex combinations:**
+```typescript
+where: {
+  AND: [
+    { age: { gte: 18 } },
+    {
+      OR: [
+        { role: 'ADMIN' },
+        { verified: true }
+      ]
+    }
+  ]
+}
+```
+
+#### Null Filters
+
+```typescript
+where: {
+  bio: null,              // bio IS NULL
+  bio: { not: null },     // bio IS NOT NULL
+  deletedAt: { equals: null },
+  updatedAt: { not: { equals: null } }
+}
+```
+
+#### Relation Filters
+
+**Filter by related records:**
+```typescript
+// Users who have at least one published post
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {
+        published: true
+      }
+    }
+  }
+})
+
+// Users who have ALL posts published
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      every: {
+        published: true
+      }
+    }
+  }
+})
+
+// Users who have NO published posts
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      none: {
+        published: true
+      }
+    }
+  }
+})
+
+// Users with no posts at all
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      none: {}
+    }
+  }
+})
+```
+
+**One-to-one relation filters:**
+```typescript
+// Users with a specific profile
+const users = await prisma.user.findMany({
+  where: {
+    profile: {
+      is: {
+        bio: { contains: 'developer' }
+      }
+    }
+  }
+})
+
+// Users without a profile
+const users = await prisma.user.findMany({
+  where: {
+    profile: {
+      isNot: null
+    }
+  }
+})
+```
+
+#### JSON Filters
+
+```typescript
+where: {
+  metadata: {
+    path: ['settings', 'theme'],
+    equals: 'dark'
+  }
+}
+
+// Array contains
+where: {
+  tags: {
+    array_contains: ['typescript', 'prisma']
+  }
+}
+
+// String contains in JSON field
+where: {
+  data: {
+    string_contains: 'searchterm'
+  }
+}
+```
+
+---
+
+## Sorting Options
+
+### orderBy
+
+Sort query results by one or more fields.
+
+```typescript
+orderBy?: {
+  [field: string]: 'asc' | 'desc'
+} | Array<{
+  [field: string]: 'asc' | 'desc'
+}>
+```
+
+**Single field:**
+```typescript
+orderBy: { createdAt: 'desc' }
+```
+
+**Multiple fields:**
+```typescript
+orderBy: [
+  { role: 'asc' },
+  { createdAt: 'desc' }
+]
+```
+
+**Sort by relation count:**
+```typescript
+orderBy: {
+  posts: {
+    _count: 'desc'
+  }
+}
+```
+
+**Sort by relation field:**
+```typescript
+orderBy: {
+  profile: {
+    bio: 'asc'
+  }
+}
+```
+
+**Null handling:**
+```typescript
+orderBy: {
+  name: { sort: 'asc', nulls: 'first' }
+}
+// nulls: 'first' | 'last'
+```
+
+---
+
+## Pagination Options
+
+### take
+
+Limit the number of records returned.
+
+```typescript
+take?: number
+```
+
+**Example:**
+```typescript
+const users = await prisma.user.findMany({
+  take: 10  // Return at most 10 records
+})
+```
+
+**Negative take (from end):**
+```typescript
+const users = await prisma.user.findMany({
+  take: -10,  // Return last 10 records
+  orderBy: { createdAt: 'asc' }
+})
+```
+
+---
+
+### skip
+
+Skip a number of records (offset pagination).
+
+```typescript
+skip?: number
+```
+
+**Example:**
+```typescript
+const users = await prisma.user.findMany({
+  skip: 20,   // Skip first 20 records
+  take: 10    // Then return next 10
+})
+```
+
+**Pagination helper:**
+```typescript
+function paginate(page: number, pageSize: number) {
+  return {
+    skip: (page - 1) * pageSize,
+    take: pageSize
+  }
+}
+
+const users = await prisma.user.findMany({
+  ...paginate(3, 10)  // Page 3, 10 items per page
+})
+```
+
+---
+
+### cursor
+
+Cursor-based pagination for efficient traversal of large datasets.
+
+```typescript
+cursor?: WhereUniqueInput
+```
+
+**Example:**
+```typescript
+// First page
+const firstPage = await prisma.user.findMany({
+  take: 10,
+  orderBy: { id: 'asc' }
+})
+
+// Next page using cursor
+const lastUser = firstPage[firstPage.length - 1]
+const nextPage = await prisma.user.findMany({
+  take: 10,
+  skip: 1,  // Skip the cursor itself
+  cursor: { id: lastUser.id },
+  orderBy: { id: 'asc' }
+})
+```
+
+<Note>
+  Cursor-based pagination is more performant than offset pagination for large datasets.
+</Note>
+
+---
+
+## Distinct
+
+### distinct
+
+Select distinct records based on one or more fields.
+
+```typescript
+distinct?: FieldName | FieldName[]
+```
+
+**Single field:**
+```typescript
+const uniqueEmails = await prisma.user.findMany({
+  distinct: ['email'],
+  select: { email: true }
+})
+```
+
+**Multiple fields:**
+```typescript
+const uniqueCombinations = await prisma.user.findMany({
+  distinct: ['role', 'country'],
+  select: { role: true, country: true }
+})
+```
+
+---
+
+## Advanced Options
+
+### Prisma.skip
+
+Explicitly skip a field in query arguments (useful with spread operators).
+
+```typescript
+import { Prisma } from '@prisma/client'
+
+const conditionalInclude = includeProfile ? { profile: true } : Prisma.skip
+
+const user = await prisma.user.findUnique({
+  where: { id: 1 },
+  include: {
+    posts: true,
+    profile: conditionalInclude
+  }
+})
+```
+
+---
+
+### Field References
+
+Compare fields within the same record.
+
+```typescript
+import { Prisma } from '@prisma/client'
+
+const users = await prisma.user.findMany({
+  where: {
+    // Find users where updatedAt > createdAt
+    updatedAt: {
+      gt: Prisma.DbNull  // This is a placeholder; actual syntax varies
+    }
+  }
+})
+```
+
+---
+
+## Complete Example
+
+Here's a comprehensive example combining multiple query options:
+
+```typescript
+const result = await prisma.post.findMany({
+  // Filtering
+  where: {
+    AND: [
+      { published: true },
+      {
+        OR: [
+          { title: { contains: 'prisma', mode: 'insensitive' } },
+          { content: { contains: 'database' } }
+        ]
+      },
+      {
+        author: {
+          is: {
+            role: 'AUTHOR',
+            active: true
+          }
+        }
+      }
+    ]
+  },
+  
+  // Selection
+  select: {
+    id: true,
+    title: true,
+    createdAt: true,
+    author: {
+      select: {
+        name: true,
+        email: true
+      }
+    },
+    _count: {
+      select: {
+        comments: true
+      }
+    }
+  },
+  
+  // Sorting
+  orderBy: [
+    { createdAt: 'desc' },
+    { title: 'asc' }
+  ],
+  
+  // Pagination
+  skip: 10,
+  take: 20,
+  
+  // Distinct
+  distinct: ['authorId']
+})
+```
+
+---
+
+## See Also
+
+- [CRUD Methods](/api/crud-methods)
+- [Filtering and Sorting](/client/filtering-sorting)
+- [Relations](/client/relations)
+- [Aggregations](/client/aggregations)

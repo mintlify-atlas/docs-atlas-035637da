@@ -1,0 +1,207 @@
+---
+title: 'prisma generate'
+description: 'Generate Prisma Client and other artifacts from your Prisma schema'
+---
+
+# prisma generate
+
+Generate artifacts (e.g. Prisma Client) from your Prisma schema.
+
+## Usage
+
+```bash
+prisma generate [options]
+```
+
+## Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma generate --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma generate --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema file.
+  
+  ```bash
+  prisma generate --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--sql" type="boolean">
+  Generate typed SQL module for type-safe raw queries.
+  
+  ```bash
+  prisma generate --sql
+  ```
+</ParamField>
+
+<ParamField path="--watch" type="boolean">
+  Watch the Prisma schema and automatically regenerate when changes are detected.
+  
+  ```bash
+  prisma generate --watch
+  ```
+</ParamField>
+
+<ParamField path="--generator" type="string[]">
+  Specify which generator(s) to run. Can be provided multiple times to run specific generators.
+  
+  ```bash
+  prisma generate --generator client1 --generator client2
+  ```
+</ParamField>
+
+<ParamField path="--no-hints" type="boolean">
+  Hide hint messages but still show errors and warnings.
+  
+  ```bash
+  prisma generate --no-hints
+  ```
+</ParamField>
+
+<ParamField path="--require-models" type="boolean">
+  Fail generation if the schema contains no models.
+  
+  ```bash
+  prisma generate --require-models
+  ```
+</ParamField>
+
+## Examples
+
+### Basic generation
+
+Generate Prisma Client with default settings:
+
+```bash
+prisma generate
+```
+
+### Specify a custom schema
+
+```bash
+prisma generate --schema=./database/schema.prisma
+```
+
+### Run specific generators
+
+Generate only specific generators defined in your schema:
+
+```bash
+prisma generate --generator client1 --generator client2
+```
+
+### Watch mode
+
+Automatically regenerate when schema changes:
+
+```bash
+prisma generate --watch
+```
+
+**Output in watch mode:**
+```
+Watching... /path/to/prisma
+
+Change in schema.prisma
+Building...
+
+✔ Generated Prisma Client to ./node_modules/@prisma/client in 89ms
+```
+
+### Generate with typed SQL
+
+Generate Prisma Client along with typed SQL queries:
+
+```bash
+prisma generate --sql
+```
+
+## Output
+
+Successful generation produces output similar to:
+
+```
+✔ Generated Prisma Client (v7.2.0) to ./node_modules/@prisma/client in 156ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+```
+
+## Generators
+
+Generators are defined in your Prisma schema:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+generator typegraphql {
+  provider = "typegraphql-prisma"
+}
+```
+
+When you run `prisma generate`, all generators are executed unless you specify specific ones with `--generator`.
+
+## Prisma Client Generation
+
+The default Prisma Client generator (`prisma-client-js`) creates a type-safe database client based on your schema. The generated client includes:
+
+- Type-safe queries for all models
+- Auto-completion in your IDE
+- Validation at compile time
+- Query builder API
+- Transaction support
+- Middleware hooks
+
+## Watch Mode
+
+In watch mode, Prisma continuously monitors your schema file for changes and automatically regenerates when it detects modifications. This is useful during development:
+
+```bash
+prisma generate --watch
+```
+
+To stop watching, press `Ctrl+C`.
+
+## Version Mismatch Warning
+
+If the `prisma` CLI version doesn't match the `@prisma/client` version, you'll see a warning:
+
+```
+⚠️ warn Versions of prisma@7.2.0 and @prisma/client@7.1.0 don't match.
+This might lead to unexpected behavior.
+Please make sure they have the same version.
+```
+
+To fix this, ensure both packages have the same version:
+
+```bash
+npm install prisma@latest @prisma/client@latest
+```
+
+## Exit Codes
+
+- `0` - Generation successful
+- `1` - Generation failed (schema errors, generator errors, etc.)
+
+## Related Commands
+
+- [`prisma validate`](/api/prisma-validate) - Validate your schema before generation
+- [`prisma format`](/api/prisma-format) - Format your schema
+- [`prisma migrate dev`](/api/prisma-migrate) - Create and apply migrations, then generate

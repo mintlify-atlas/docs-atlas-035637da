@@ -1,0 +1,149 @@
+---
+title: Introduction to Prisma ORM
+description: Next-generation Node.js and TypeScript ORM with auto-generated, type-safe database client
+---
+
+# Introduction to Prisma ORM
+
+Prisma ORM is a **next-generation ORM** that makes working with databases easy and type-safe. It consists of powerful tools that work together to provide an exceptional developer experience for Node.js and TypeScript applications.
+
+## What is Prisma ORM?
+
+Prisma ORM transforms the way you work with databases by providing:
+
+<CardGroup cols={3}>
+  <Card title="Prisma Client" icon="database">
+    Auto-generated and type-safe query builder for Node.js & TypeScript
+  </Card>
+  <Card title="Prisma Migrate" icon="arrows-rotate">
+    Declarative data modeling & migration system
+  </Card>
+  <Card title="Prisma Studio" icon="window">
+    GUI to view and edit data in your database
+  </Card>
+</CardGroup>
+
+## Why Prisma ORM?
+
+### Type-safe database access
+
+Prisma Client is fully type-safe, giving you autocompletion and compile-time errors when working with your database. No more runtime surprises.
+
+### Intuitive data modeling
+
+Define your database schema with an intuitive modeling language that's easy to read and write. Prisma handles the complexity of SQL for you.
+
+### Auto-generated queries
+
+Prisma Client is generated from your schema, providing a query API that's perfectly tailored to your data model with full TypeScript support.
+
+### Works with your stack
+
+Prisma Client can be used in any Node.js or TypeScript backend application, including:
+- REST APIs
+- GraphQL APIs
+- gRPC services
+- Serverless functions
+- Microservices
+
+## Supported databases
+
+Prisma ORM supports all major databases:
+
+- PostgreSQL
+- MySQL
+- MariaDB
+- SQL Server
+- SQLite
+- CockroachDB
+- MongoDB
+
+## How it works
+
+Prisma ORM uses a modern architecture built on JavaScript drivers and WebAssembly:
+
+<Steps>
+  <Step title="Define your schema">
+    Create a `schema.prisma` file that defines your data models and database configuration.
+  </Step>
+  
+  <Step title="Configure connection">
+    Set up a `prisma.config.ts` file with your database connection details.
+  </Step>
+  
+  <Step title="Generate Prisma Client">
+    Run `prisma generate` to create a fully type-safe client tailored to your schema.
+  </Step>
+  
+  <Step title="Query your database">
+    Import Prisma Client and start querying with full TypeScript support and autocompletion.
+  </Step>
+</Steps>
+
+## Example
+
+Here's what working with Prisma looks like:
+
+```typescript
+import { PrismaClient } from './generated/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+
+const adapter = new PrismaPg({ 
+  connectionString: process.env.DATABASE_URL 
+})
+const prisma = new PrismaClient({ adapter })
+
+// Create a new user
+const user = await prisma.user.create({
+  data: {
+    name: 'Alice',
+    email: 'alice@prisma.io',
+    posts: {
+      create: { title: 'Join us for Prisma Day 2021' },
+    },
+  },
+})
+
+// Query users with their posts
+const users = await prisma.user.findMany({
+  include: { posts: true },
+})
+```
+
+<Note>
+  All queries return plain JavaScript objects, and TypeScript knows exactly what shape your data will have.
+</Note>
+
+## Get started
+
+Ready to start building? Choose your path:
+
+<CardGroup cols={2}>
+  <Card 
+    title="Quickstart" 
+    icon="bolt" 
+    href="/quickstart"
+  >
+    Get up and running with Prisma in 5 minutes
+  </Card>
+  <Card 
+    title="Installation" 
+    icon="download" 
+    href="/installation"
+  >
+    Detailed installation guide for all package managers
+  </Card>
+</CardGroup>
+
+## Community and support
+
+Prisma has a large and supportive community of enthusiastic developers:
+
+- Join the [Discord community](https://pris.ly/discord) for discussions and help
+- Browse [GitHub Discussions](https://github.com/prisma/prisma/discussions) for questions and answers
+- Follow [@prisma](https://pris.ly/x) on Twitter for updates
+- Watch tutorials on [YouTube](https://pris.ly/youtube)
+
+<Tip>
+  If you're looking for a database to use with Prisma ORM, check out [Prisma Postgres](https://www.prisma.io/docs/getting-started/prisma-orm/quickstart/prisma-postgres) for an instant cloud database.
+</Tip>

@@ -1,0 +1,450 @@
+---
+title: Testing with Prisma
+description: Strategies and best practices for testing applications using Prisma ORM
+---
+
+## Overview
+
+Testing database interactions is crucial for application reliability. This guide covers testing strategies, database setup, and best practices for Prisma-based applications.
+
+## Test Database Setup
+
+### Separate Test Database
+
+Always use a separate database for testing:
+
+```typescript prisma.config.ts
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('NODE_ENV') === 'test' 
+      ? env('TEST_DATABASE_URL')
+      : env('DATABASE_URL'),
+  },
+})
+```
+
+### In-Memory SQLite
+
+For fast unit tests, use in-memory SQLite:
+
+```typescript
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaClient } from '@prisma/client'
+import Database from 'better-sqlite3'
+
+function createTestClient() {
+  const db = new Database(':memory:')
+  const adapter = new PrismaBetterSqlite3(db)
+  return new PrismaClient({ adapter })
+}
+```
+
+## Testing Patterns
+
+### Unit Testing
+
+#### Basic CRUD Tests
+
+```typescript
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+describe('User', () => {
+  beforeEach(async () => {
+    // Clean database before each test
+    await prisma.user.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('should create a user', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: 'test@example.com',
+        name: 'Test User',
+      },
+    })
+
+    expect(user).toMatchObject({
+      email: 'test@example.com',
+      name: 'Test User',
+      id: expect.any(String),
+    })
+  })
+
+  it('should enforce unique email constraint', async () => {
+    const email = 'duplicate@example.com'
+
+    await prisma.user.create({
+      data: { email },
+    })
+
+    await expect(
+      prisma.user.create({
+        data: { email },
+      })
+    ).rejects.toThrow('Unique constraint failed')
+  })
+})
+```
+
+### Integration Testing
+
+#### Testing Transactions
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('Transaction tests', () => {
+  it('should rollback on error', async () => {
+    const email1 = 'user1@example.com'
+    const email2 = email1 // Duplicate email
+    const email3 = 'user3@example.com'
+
+    await expect(
+      prisma.$transaction([
+        prisma.user.create({ data: { email: email1 } }),
+        prisma.user.create({ data: { email: email2 } }), // Will fail
+        prisma.user.create({ data: { email: email3 } }),
+      ])
+    ).rejects.toThrow('Unique constraint failed')
+
+    // Verify nothing was committed
+    const users = await prisma.user.findMany({
+      where: { email: { in: [email1, email3] } }
+    })
+    expect(users).toEqual([])
+  })
+
+  it('should commit successful transaction', async () => {
+    const emails = [
+      'user1@example.com',
+      'user2@example.com',
+      'user3@example.com',
+    ]
+
+    const results = await prisma.$transaction([
+      prisma.user.create({ data: { email: emails[0] } }),
+      prisma.user.create({ data: { email: emails[1] } }),
+      prisma.user.create({ data: { email: emails[2] } }),
+    ])
+
+    expect(results).toHaveLength(3)
+    expect(results[0]).toMatchObject({ email: emails[0] })
+
+    const users = await prisma.user.findMany({
+      where: { email: { in: emails } }
+    })
+    expect(users).toHaveLength(3)
+  })
+})
+```
+
+#### Interactive Transaction Tests
+
+```typescript
+it('should handle interactive transactions', async () => {
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { email: 'user@example.com' },
+    })
+
+    const post = await tx.post.create({
+      data: {
+        title: 'First Post',
+        userId: user.id,
+      },
+    })
+
+    return { user, post }
+  })
+
+  expect(result.user).toBeDefined()
+  expect(result.post.userId).toBe(result.user.id)
+})
+
+it('should timeout long-running transactions', async () => {
+  await expect(
+    prisma.$transaction(
+      async (tx) => {
+        await tx.user.create({
+          data: { email: 'user@example.com' },
+        })
+
+        // Simulate long operation
+        await new Promise(resolve => setTimeout(resolve, 6000))
+      },
+      { timeout: 5000 }
+    )
+  ).rejects.toMatchObject({
+    code: 'P2028',
+    message: expect.stringContaining('timeout'),
+  })
+})
+```
+
+### Mocking Strategies
+
+#### Mock Prisma Client
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { mockDeep, mockReset, DeepMockProxy } from 'vitest-mock-extended'
+
+export const prismaMock = mockDeep<PrismaClient>()
+
+beforeEach(() => {
+  mockReset(prismaMock)
+})
+
+// In your test
+it('should find user by email', async () => {
+  const mockUser = {
+    id: '1',
+    email: 'test@example.com',
+    name: 'Test User',
+  }
+
+  prismaMock.user.findUnique.mockResolvedValue(mockUser)
+
+  const user = await prismaMock.user.findUnique({
+    where: { email: 'test@example.com' },
+  })
+
+  expect(user).toEqual(mockUser)
+})
+```
+
+## Test Fixtures
+
+### Seed Test Data
+
+```typescript
+interface CreateTestUserOptions {
+  email?: string
+  name?: string
+}
+
+async function createTestUser(options: CreateTestUserOptions = {}) {
+  return await prisma.user.create({
+    data: {
+      email: options.email ?? `user-${Date.now()}@example.com`,
+      name: options.name ?? 'Test User',
+    },
+  })
+}
+
+// Use in tests
+it('should create post for user', async () => {
+  const user = await createTestUser()
+  
+  const post = await prisma.post.create({
+    data: {
+      title: 'Test Post',
+      userId: user.id,
+    },
+  })
+
+  expect(post.userId).toBe(user.id)
+})
+```
+
+### Factory Pattern
+
+```typescript
+import { faker } from '@faker-js/faker'
+
+class UserFactory {
+  static async create(overrides?: Partial<UserCreateInput>) {
+    return await prisma.user.create({
+      data: {
+        email: faker.internet.email(),
+        name: faker.person.fullName(),
+        ...overrides,
+      },
+    })
+  }
+
+  static async createMany(count: number) {
+    return Promise.all(
+      Array.from({ length: count }, () => this.create())
+    )
+  }
+}
+
+// Use in tests
+it('should paginate users', async () => {
+  await UserFactory.createMany(50)
+
+  const page1 = await prisma.user.findMany({
+    take: 20,
+    skip: 0,
+  })
+
+  expect(page1).toHaveLength(20)
+})
+```
+
+## Database Cleanup
+
+### Reset Between Tests
+
+```typescript
+import { beforeEach } from 'vitest'
+
+beforeEach(async () => {
+  // Clean all tables
+  await prisma.post.deleteMany()
+  await prisma.user.deleteMany()
+})
+```
+
+### Truncate All Tables
+
+```typescript
+async function resetDatabase() {
+  const tables = ['Post', 'User'] // List all tables
+
+  await prisma.$transaction(
+    tables.map((table) =>
+      prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE`)
+    )
+  )
+}
+
+beforeEach(async () => {
+  await resetDatabase()
+})
+```
+
+<Warning>
+For PostgreSQL, use `TRUNCATE` for better performance. For SQLite in tests, use `DELETE` or recreate the database.
+</Warning>
+
+## Testing Raw Queries
+
+### Query Raw Tests
+
+```typescript
+it('should execute raw query', async () => {
+  await prisma.user.create({
+    data: { email: 'test@example.com', age: 25 },
+  })
+
+  const result = await prisma.$queryRaw`
+    SELECT * FROM "User" WHERE age >= ${20} AND age <= ${30}
+  `
+
+  expect(result).toHaveLength(1)
+  expect(result[0]).toMatchObject({
+    email: 'test@example.com',
+    age: 25,
+  })
+})
+```
+
+### Execute Raw Tests
+
+```typescript
+it('should execute raw update', async () => {
+  await prisma.user.create({
+    data: { email: 'test@example.com', age: 25 },
+  })
+
+  const affected = await prisma.$executeRaw`
+    UPDATE "User" SET age = ${30} WHERE age = ${25}
+  `
+
+  expect(affected).toBe(1)
+
+  const user = await prisma.user.findUnique({
+    where: { email: 'test@example.com' },
+  })
+  expect(user?.age).toBe(30)
+})
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml .github/workflows/test.yml
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate Prisma Client
+        run: npx prisma generate
+      
+      - name: Run migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+      
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+```
+
+## Best Practices
+
+1. **Isolate tests**: Each test should be independent
+2. **Clean database**: Reset state between tests
+3. **Use test database**: Never test against production
+4. **Test transactions**: Verify rollback and commit behavior
+5. **Test constraints**: Validate unique, foreign key constraints
+6. **Use factories**: Create reusable test data generators
+7. **Test error cases**: Don't just test happy paths
+8. **Mock external services**: Isolate database tests from external APIs
+9. **Parallel testing**: Use separate databases for parallel tests
+10. **CI integration**: Automate tests in your deployment pipeline
+
+## Testing Checklist
+
+- [ ] Separate test database configured
+- [ ] Database cleaned between tests
+- [ ] Transaction behavior tested
+- [ ] Error cases covered
+- [ ] Unique constraints validated
+- [ ] Factory pattern for test data
+- [ ] CI/CD integration configured
+- [ ] Raw queries tested
+- [ ] Connection cleanup in afterAll
+- [ ] Realistic test data generated

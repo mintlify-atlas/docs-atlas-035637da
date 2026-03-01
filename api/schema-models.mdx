@@ -1,0 +1,277 @@
+---
+title: 'Model Definitions'
+description: 'Define data models and their structure using Prisma Schema Language.'
+---
+
+## Overview
+
+Models represent tables in your database and define the structure of your data. Each model maps to a database table and contains fields that define columns.
+
+## Basic Syntax
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+}
+```
+
+## Model Structure
+
+### Naming Conventions
+
+Model names:
+- Use PascalCase (e.g., `User`, `Post`, `BlogPost`)
+- Should be singular (Prisma pluralizes table names by default)
+- Must start with a letter
+- Can contain letters, numbers, and underscores
+
+```prisma
+model User {
+  id Int @id
+}
+
+model BlogPost {
+  id Int @id
+}
+
+model course_enrollment {
+  id Int @id
+}
+```
+
+### Simple Model Example
+
+```prisma
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+## Model Features
+
+### Required vs Optional Fields
+
+Fields are required by default. Add `?` for optional fields:
+
+```prisma
+model User {
+  id       Int     @id
+  email    String  // Required
+  name     String? // Optional
+  bio      String? // Optional
+}
+```
+
+### Database Table Mapping
+
+By default, model names map to table names. Use `@@map` to customize:
+
+```prisma
+model User {
+  id    Int    @id
+  email String
+
+  @@map("users")
+}
+```
+
+### Model Comments
+
+Add documentation to your models:
+
+```prisma
+/// User account information
+model User {
+  id    Int    @id
+  email String @unique
+}
+
+/// This model contains an expression index which requires additional setup.
+model Account {
+  id       Int    @id
+  username String
+}
+```
+
+## Complete Model Examples
+
+### User Management
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts    Post[]
+  profile  Profile?
+}
+```
+
+### Blog Post
+
+```prisma
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  authorId  Int
+
+  author   User       @relation(fields: [authorId], references: [id])
+  comments Comment[]
+}
+```
+
+### E-commerce Product
+
+```prisma
+model Product {
+  id          Int      @id @default(autoincrement())
+  sku         String   @unique
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      OrderItem[]
+  categories  CategoryProduct[]
+}
+```
+
+### User Profile
+
+```prisma
+model Profile {
+  id        Int      @id @default(autoincrement())
+  bio       String?
+  avatarUrl String?
+  userId    Int      @unique
+
+  user User @relation(fields: [userId], references: [id])
+}
+```
+
+### Authentication Tokens
+
+```prisma
+model Token {
+  id         Int       @id @default(autoincrement())
+  type       TokenType
+  token      String?   @unique
+  valid      Boolean   @default(true)
+  expiration DateTime
+  createdAt  DateTime  @default(now())
+  userId     Int
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum TokenType {
+  EMAIL
+  API
+}
+```
+
+### Course Enrollment (Many-to-Many)
+
+```prisma
+model CourseEnrollment {
+  userId    Int
+  courseId  Int
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@id([userId, courseId])
+  @@index([userId, role])
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+}
+```
+
+## Model Organization
+
+### Grouping Related Models
+
+Organize related models together:
+
+```prisma
+// User Management
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  posts Post[]
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String?
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// Content Management
+model Post {
+  id       Int      @id @default(autoincrement())
+  title    String
+  authorId Int
+  author   User     @relation(fields: [authorId], references: [id])
+}
+
+model Comment {
+  id      Int    @id @default(autoincrement())
+  content String
+  postId  Int
+  post    Post   @relation(fields: [postId], references: [id])
+}
+```
+
+## Model Ignoring
+
+Exclude models from Prisma Client generation:
+
+```prisma
+model InternalLog {
+  id      Int    @id
+  message String
+
+  @@ignore
+}
+```
+
+Use cases:
+- Legacy tables you don't need in your application
+- Temporary migration tables
+- Database-specific system tables
+
+## Best Practices
+
+1. Use singular, PascalCase names for models
+2. Add comments for complex models or business logic
+3. Group related models together in your schema
+4. Use meaningful field names that reflect your domain
+5. Consider using `@@map` for existing databases with different naming conventions
+6. Always include timestamp fields (`createdAt`, `updatedAt`) for auditing
+7. Use appropriate field types for your data (covered in Field Types documentation)

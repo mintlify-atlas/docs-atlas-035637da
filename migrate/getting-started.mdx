@@ -1,0 +1,247 @@
+---
+title: Getting Started with Prisma Migrate
+description: Create your first database migration with Prisma Migrate and learn the basic workflow.
+---
+
+This guide walks you through creating your first migration with Prisma Migrate.
+
+## Prerequisites
+
+- A Prisma project with a Prisma schema
+- A Prisma config file (e.g., `prisma.config.ts`)
+- Database connection configured
+
+## Your First Migration
+
+<Steps>
+  <Step title="Define Your Schema">
+    Create or update your Prisma schema with your data model:
+
+    ```prisma
+    model User {
+      id    Int     @id @default(autoincrement())
+      email String  @unique
+      name  String?
+      posts Post[]
+    }
+
+    model Post {
+      id        Int     @id @default(autoincrement())
+      title     String
+      content   String?
+      published Boolean @default(false)
+      authorId  Int
+      author    User    @relation(fields: [authorId], references: [id])
+    }
+    ```
+  </Step>
+
+  <Step title="Create the Migration">
+    Run `prisma migrate dev` to create and apply the migration:
+
+    ```bash
+    prisma migrate dev --name init
+    ```
+
+    This command will:
+    - Create a new migration directory with timestamp: `prisma/migrations/20201231000000_init/`
+    - Generate a `migration.sql` file with the SQL statements
+    - Apply the migration to your database
+    - Generate Prisma Client (if not using `--create-only`)
+  </Step>
+
+  <Step title="Review the Generated SQL">
+    Prisma Migrate generates SQL based on your schema changes:
+
+    ```sql prisma/migrations/20201231000000_init/migration.sql
+    -- CreateTable
+    CREATE TABLE "User" (
+        "id" SERIAL NOT NULL,
+        "email" TEXT NOT NULL,
+        "name" TEXT,
+
+        CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    );
+
+    -- CreateTable
+    CREATE TABLE "Post" (
+        "id" SERIAL NOT NULL,
+        "title" TEXT NOT NULL,
+        "content" TEXT,
+        "published" BOOLEAN NOT NULL DEFAULT false,
+        "authorId" INTEGER NOT NULL,
+
+        CONSTRAINT "Post_pkey" PRIMARY KEY ("id")
+    );
+
+    -- CreateIndex
+    CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+    -- AddForeignKey
+    ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey" 
+      FOREIGN KEY ("authorId") REFERENCES "User"("id") 
+      ON DELETE RESTRICT ON UPDATE CASCADE;
+    ```
+  </Step>
+
+  <Step title="Verify the Migration">
+    Check that your migration was applied successfully:
+
+    ```bash
+    prisma migrate status
+    ```
+
+    You should see:
+
+    ```
+    1 migration found in prisma/migrations
+
+    Database schema is up to date!
+    ```
+  </Step>
+</Steps>
+
+## Command Options
+
+The `prisma migrate dev` command supports several options:
+
+### `--name` or `-n`
+
+Name the migration:
+
+```bash
+prisma migrate dev --name add_users_table
+```
+
+### `--create-only`
+
+Create the migration without applying it:
+
+```bash
+prisma migrate dev --create-only
+```
+
+This is useful when you need to:
+- Review the generated SQL before applying
+- Manually edit the migration
+- Create an empty migration for custom SQL
+
+After editing, apply with:
+
+```bash
+prisma migrate dev
+```
+
+### `--schema`
+
+Specify a custom schema path:
+
+```bash
+prisma migrate dev --schema=./custom/schema.prisma
+```
+
+### `--config`
+
+Specify a custom config path:
+
+```bash
+prisma migrate dev --config=./custom/prisma.config.ts
+```
+
+## Making Additional Changes
+
+<Steps>
+  <Step title="Update Your Schema">
+    Add a new field to an existing model:
+
+    ```prisma
+    model User {
+      id        Int      @id @default(autoincrement())
+      email     String   @unique
+      name      String?
+      posts     Post[]
+      createdAt DateTime @default(now())  // New field
+    }
+    ```
+  </Step>
+
+  <Step title="Create Another Migration">
+    ```bash
+    prisma migrate dev --name add_created_at
+    ```
+  </Step>
+
+  <Step title="View Migration History">
+    Your migrations directory now contains:
+
+    ```
+    prisma/
+      └─ migrations/
+        ├─ 20201231000000_init/
+        │  └─ migration.sql
+        ├─ 20210101120000_add_created_at/
+        │  └─ migration.sql
+        └─ migration_lock.toml
+    ```
+  </Step>
+</Steps>
+
+## Handling Data Loss Warnings
+
+Some schema changes may result in data loss. Prisma Migrate will warn you:
+
+```
+⚠️  There might be data loss when applying the changes:
+
+  • You are about to drop the column `name` on the `User` table.
+
+Are you sure you want to create and apply this migration?
+```
+
+Options:
+- Type `y` to proceed
+- Type `n` to cancel
+- Use `--accept-data-loss` flag to skip the prompt (CI/CD environments)
+
+## Handling Unexecutable Steps
+
+Some changes cannot be executed automatically:
+
+```
+⚠️ We found changes that cannot be executed:
+
+  • Added the required column `authorId` to the `Post` table without a default value.
+```
+
+Solutions:
+1. Add a default value in your schema
+2. Make the field optional
+3. Use `--create-only` and manually edit the migration
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Descriptive Names" icon="tag">
+    Use clear, descriptive migration names that explain the change
+  </Card>
+  <Card title="Review Generated SQL" icon="eye">
+    Always review the generated SQL before applying in production
+  </Card>
+  <Card title="Small Migrations" icon="minimize">
+    Keep migrations focused on a single logical change
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    Commit migration files to version control
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Migration Workflows" icon="workflow" href="/migrate/migration-workflows">
+    Learn development and production workflows
+  </Card>
+  <Card title="Schema Prototyping" icon="flask" href="/migrate/schema-prototyping">
+    Use db push for rapid iteration
+  </Card>
+</CardGroup>

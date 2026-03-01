@@ -1,0 +1,438 @@
+---
+title: Database Introspection with db pull
+description: Learn how to introspect existing databases to generate a Prisma schema using db pull.
+---
+
+Use `prisma db pull` to introspect an existing database and generate or update your Prisma schema based on the database structure.
+
+## What is db pull?
+
+`prisma db pull` connects to your database, inspects the schema, and generates Prisma schema models that match your database tables. This is useful for:
+
+- **Existing databases**: Add Prisma to projects with existing databases
+- **Database-first workflows**: When the database schema is the source of truth
+- **Schema updates**: Update your Prisma schema when database changes are made externally
+- **Legacy migrations**: Move from other migration tools to Prisma Migrate
+
+## Basic Usage
+
+<Steps>
+  <Step title="Configure Database Connection">
+    Set up your database URL in your Prisma config:
+
+    ```typescript prisma.config.ts
+    import { defineConfig } from '@prisma/config'
+
+    export default defineConfig({
+      datasource: {
+        url: process.env.DATABASE_URL
+      },
+      schema: 'prisma/schema.prisma'
+    })
+    ```
+  </Step>
+
+  <Step title="Run db pull">
+    ```bash
+    prisma db pull
+    ```
+
+    Output:
+    ```
+    Prisma schema loaded from prisma/schema.prisma.
+    Datasource "db": PostgreSQL database "production_db" at "localhost:5432"
+
+    - Introspecting based on datasource defined in prisma/schema.prisma
+    ✔ Introspected 3 models and wrote them into prisma/schema.prisma in 127ms
+          
+    Run prisma generate to generate Prisma Client.
+    ```
+  </Step>
+
+  <Step title="Review Generated Schema">
+    Your Prisma schema now contains models matching your database:
+
+    ```prisma
+    model User {
+      id         Int      @id @default(autoincrement())
+      email      String   @unique(map: "User_email_key")
+      name       String?
+      created_at DateTime @default(now()) @db.Timestamptz(6)
+      posts      Post[]
+    }
+
+    model Post {
+      id         Int      @id @default(autoincrement())
+      title      String
+      content    String?
+      published  Boolean  @default(false)
+      author_id  Int
+      author     User     @relation(fields: [author_id], references: [id], onDelete: Restrict)
+    }
+    ```
+  </Step>
+
+  <Step title="Generate Prisma Client">
+    ```bash
+    prisma generate
+    ```
+  </Step>
+</Steps>
+
+## Command Options
+
+### `--force`
+
+Overwrite the current schema instead of enriching it:
+
+```bash
+prisma db pull --force
+```
+
+<Warning>
+  `--force` will overwrite manual changes like comments, `@ignore` attributes, and custom field names.
+</Warning>
+
+Use `--force` when:
+- Starting fresh with introspection
+- Database schema is the absolute source of truth
+- You want to discard local schema modifications
+
+### `--print`
+
+Print the introspected schema to stdout instead of writing to file:
+
+```bash
+prisma db pull --print
+```
+
+Useful for:
+- Previewing changes before writing
+- Piping output to other tools
+- CI/CD validation
+
+### `--schema`
+
+Specify a custom schema path:
+
+```bash
+prisma db pull --schema=./custom/schema.prisma
+```
+
+### `--config`
+
+Specify a custom config file:
+
+```bash
+prisma db pull --config=./custom/prisma.config.ts
+```
+
+### `--url`
+
+Override the datasource URL:
+
+```bash
+prisma db pull --url="postgresql://user:pass@prod-db:5432/mydb"
+```
+
+### `--composite-type-depth`
+
+Set introspection depth for composite types (MongoDB):
+
+```bash
+# Introspect 2 levels deep
+prisma db pull --composite-type-depth=2
+
+# Disable composite type introspection
+prisma db pull --composite-type-depth=0
+
+# Infinite depth (default)
+prisma db pull --composite-type-depth=-1
+```
+
+### `--schemas`
+
+Introspect specific database schemas:
+
+```bash
+prisma db pull --schemas=public,auth
+```
+
+## Re-introspection
+
+By default, `db pull` enriches your existing schema rather than replacing it.
+
+### What is Preserved?
+
+- Custom model names (via `@@map`)
+- Custom field names (via `@map`)
+- Comments
+- `@ignore` attributes
+- Relation names
+- Custom type mappings
+
+### Example: Enrichment vs Force
+
+**Original schema:**
+```prisma
+/// User account information
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String   @map("first_name")  // Custom mapping
+}
+```
+
+**After `prisma db pull` (enrichment):**
+```prisma
+/// User account information
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String   @map("first_name")  // Preserved
+  lastName  String   @map("last_name")   // New field added
+}
+```
+
+**After `prisma db pull --force` (replacement):**
+```prisma
+model User {
+  id         Int    @id @default(autoincrement())
+  email      String @unique(map: "User_email_key")
+  first_name String  // Lost custom mapping
+  last_name  String
+}
+```
+
+## MongoDB Introspection
+
+<Note>
+  Re-introspection is not supported for MongoDB. Always use `--force`.
+</Note>
+
+For MongoDB databases:
+
+```bash
+prisma db pull --force
+```
+
+MongoDB introspection:
+- Samples documents to infer schema
+- Introspects embedded documents
+- Respects `--composite-type-depth` setting
+
+## Handling Empty Databases
+
+If the database has no tables:
+
+```
+Error: P4001
+The introspected database was empty:
+
+prisma db pull could not create any models in your schema.prisma file and you will 
+not be able to generate Prisma Client with the prisma generate command.
+
+To fix this, you have two options:
+
+- manually create a table in your database.
+- make sure the database connection URL inside the datasource block in schema.prisma 
+  points to a database that is not empty (it must contain at least one table).
+
+Then you can run prisma db pull again.
+```
+
+## Introspection Warnings
+
+Prisma may emit warnings during introspection:
+
+```
+✔ Introspected 3 models and wrote them into prisma/schema.prisma in 147ms
+      
+*** WARNING ***
+
+The following fields had data stored in multiple types:
+  - Model: "User", field: "metadata", chosen data type: "Json"
+
+Run prisma generate to generate Prisma Client.
+```
+
+Common warnings:
+- **Mixed types**: Fields with inconsistent data types
+- **Unsupported types**: Database types not supported by Prisma
+- **Missing relations**: Foreign keys without proper indexes
+
+## Multi-Schema Introspection
+
+Introspect multiple database schemas (PostgreSQL/SQL Server):
+
+<Steps>
+  <Step title="Specify Schemas in Config">
+    ```prisma
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+      schemas  = ["public", "auth", "analytics"]
+    }
+    ```
+  </Step>
+
+  <Step title="Run Introspection">
+    ```bash
+    prisma db pull
+    ```
+  </Step>
+
+  <Step title="Override with Flag">
+    ```bash
+    # Introspect only specific schemas
+    prisma db pull --schemas=public,auth
+    ```
+  </Step>
+</Steps>
+
+Generated schema includes schema mapping:
+
+```prisma
+model User {
+  id    Int    @id
+  email String
+
+  @@schema("public")
+}
+
+model Session {
+  id     String
+  userId Int
+
+  @@schema("auth")
+}
+```
+
+## Working with Existing Projects
+
+### Adding Prisma to an Existing Project
+
+<Steps>
+  <Step title="Initialize Prisma">
+    ```bash
+    npm install prisma --save-dev
+    npx prisma init
+    ```
+  </Step>
+
+  <Step title="Configure Database URL">
+    Update your config file with the existing database URL.
+  </Step>
+
+  <Step title="Introspect Database">
+    ```bash
+    prisma db pull
+    ```
+  </Step>
+
+  <Step title="Install Prisma Client">
+    ```bash
+    npm install @prisma/client
+    prisma generate
+    ```
+  </Step>
+
+  <Step title="Start Using Prisma">
+    ```typescript
+    import { PrismaClient } from '@prisma/client'
+
+    const prisma = new PrismaClient()
+
+    const users = await prisma.user.findMany()
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Baseline First" icon="flag">
+    After introspection, create a baseline migration before making changes.
+  </Card>
+  <Card title="Review Generated Schema" icon="eye">
+    Always review and refine the introspected schema.
+  </Card>
+  <Card title="Use Enrichment" icon="layer-group">
+    Avoid `--force` to preserve manual customizations.
+  </Card>
+  <Card title="Document Changes" icon="file-lines">
+    Add comments to explain business logic and constraints.
+  </Card>
+</CardGroup>
+
+## After Introspection
+
+Common refinements after introspection:
+
+### 1. Rename Models and Fields
+
+```prisma
+// Before
+model user_accounts {
+  id         Int @id
+  email_addr String
+}
+
+// After
+model User {
+  id    Int    @id
+  email String @map("email_addr")
+
+  @@map("user_accounts")
+}
+```
+
+### 2. Add Relations
+
+```prisma
+// Introspected without relation
+model Post {
+  id        Int
+  author_id Int
+}
+
+// Add relation
+model Post {
+  id       Int  @id
+  authorId Int  @map("author_id")
+  author   User @relation(fields: [authorId], references: [id])
+}
+```
+
+### 3. Refine Types
+
+```prisma
+// Introspected as String
+model Product {
+  id     Int
+  status String
+}
+
+// Use enum
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Product {
+  id     Int           @id
+  status ProductStatus @map("status")
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Baseline Existing Database" icon="timeline" href="/migrate/baseline">
+    Create a baseline migration for existing databases
+  </Card>
+  <Card title="Migration Workflows" icon="workflow" href="/migrate/migration-workflows">
+    Start using migrations for schema changes
+  </Card>
+</CardGroup>

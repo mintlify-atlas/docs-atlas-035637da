@@ -1,0 +1,99 @@
+---
+title: Driver Adapters Overview
+description: Learn about Prisma ORM's driver adapter system for using JavaScript database drivers
+---
+
+# Driver Adapters Overview
+
+Prisma ORM's driver adapter system allows you to use JavaScript database drivers instead of native binaries. This enables Prisma to work in environments where native binaries are not supported, such as serverless platforms and edge runtimes.
+
+## What are Driver Adapters?
+
+Driver adapters are JavaScript packages that allow Prisma Client to communicate with databases using popular JavaScript drivers. Instead of using native database drivers, Prisma Client can leverage JavaScript drivers like `pg`, `better-sqlite3`, or serverless-optimized drivers like Neon's serverless driver.
+
+## Benefits
+
+- **Edge Runtime Support**: Deploy Prisma Client to edge runtimes like Cloudflare Workers
+- **Serverless Optimization**: Use HTTP-based database connections optimized for serverless environments
+- **Flexibility**: Choose from multiple driver options for the same database
+- **No Native Dependencies**: Pure JavaScript drivers work in environments where native binaries are restricted
+
+## Available Adapters
+
+Prisma provides official driver adapters for multiple databases:
+
+### PostgreSQL
+- [`@prisma/adapter-pg`](/adapters/postgresql#pg-adapter) - Node.js PostgreSQL driver
+- [`@prisma/adapter-neon`](/adapters/postgresql#neon-adapter) - Neon serverless driver (HTTP/WebSocket)
+- [`@prisma/adapter-ppg`](/adapters/postgresql#prisma-postgres-adapter) - Prisma Postgres serverless driver
+
+### MySQL/MariaDB
+- [`@prisma/adapter-mariadb`](/adapters/mysql) - MariaDB/MySQL connector
+- [`@prisma/adapter-planetscale`](/adapters/edge-runtime#planetscale-adapter) - PlanetScale serverless driver (HTTP)
+
+### SQLite
+- [`@prisma/adapter-better-sqlite3`](/adapters/sqlite#better-sqlite3-adapter) - Fast synchronous SQLite driver
+- [`@prisma/adapter-libsql`](/adapters/sqlite#libsql-turso-adapter) - libSQL and Turso driver
+- [`@prisma/adapter-d1`](/adapters/edge-runtime#cloudflare-d1-adapter) - Cloudflare D1 driver
+
+### SQL Server
+- [`@prisma/adapter-mssql`](/adapters/sql-server) - Microsoft SQL Server driver
+
+## How Driver Adapters Work
+
+Driver adapters implement the `SqlDriverAdapter` interface from `@prisma/driver-adapter-utils`. This interface defines methods for:
+
+- Executing raw SQL queries (`queryRaw`, `executeRaw`)
+- Managing transactions (`startTransaction`, commit, rollback)
+- Handling savepoints for nested transactions
+- Disposing connections
+
+When you instantiate Prisma Client with an adapter, Prisma uses the adapter to execute all database operations:
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+const prisma = new PrismaClient({ adapter })
+```
+
+## Architecture
+
+The driver adapter system consists of:
+
+1. **Adapter Packages** (`@prisma/adapter-*`): Implement driver-specific logic
+2. **Adapter Utils** (`@prisma/driver-adapter-utils`): Shared types and interfaces
+3. **Client Engine**: Orchestrates query execution using the adapter
+4. **Query Interpreter**: Executes query plans against the `SqlQueryable` interface
+
+## Error Handling
+
+Each adapter maps database-specific errors to Prisma's unified error format. Errors are converted to `MappedError` types and then to Prisma Client error codes (P2xxx).
+
+For example, a PostgreSQL unique constraint violation is mapped to:
+- Kind: `UniqueConstraintViolation`
+- Prisma Code: `P2002`
+
+## Transaction Support
+
+All adapters support:
+- **Interactive Transactions**: Begin, commit, rollback
+- **Isolation Levels**: `READ UNCOMMITTED`, `READ COMMITTED`, `REPEATABLE READ`, `SERIALIZABLE`, `SNAPSHOT` (SQL Server)
+- **Savepoints**: Nested transaction support using `createSavepoint`, `rollbackToSavepoint`, `releaseSavepoint`
+
+## Connection Management
+
+Adapters handle connection pooling differently:
+
+- **Node.js adapters** (pg, mariadb, mssql): Use connection pools
+- **Serverless adapters** (Neon HTTP, PlanetScale): Use HTTP connections
+- **SQLite adapters**: Direct file access or remote connections
+
+## Next Steps
+
+- [PostgreSQL Adapters](/adapters/postgresql)
+- [MySQL/MariaDB Adapters](/adapters/mysql)
+- [SQLite Adapters](/adapters/sqlite)
+- [SQL Server Adapter](/adapters/sql-server)
+- [Edge Runtime Adapters](/adapters/edge-runtime)

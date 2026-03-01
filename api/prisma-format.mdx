@@ -1,0 +1,325 @@
+---
+title: 'prisma format'
+description: 'Format your Prisma schema for consistent style and readability'
+---
+
+# prisma format
+
+Format your Prisma schema file(s) for consistent style and readability.
+
+## Usage
+
+```bash
+prisma format [options]
+```
+
+## Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma format --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma format --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma format --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--check" type="boolean">
+  Check if the schema is formatted without modifying it. Exits with error if formatting is needed.
+  
+  ```bash
+  prisma format --check
+  ```
+</ParamField>
+
+## Examples
+
+### Basic formatting
+
+```bash
+prisma format
+```
+
+**Output:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Formatted prisma/schema.prisma in 23ms 🚀
+```
+
+### Check if formatted
+
+```bash
+prisma format --check
+```
+
+**Output (already formatted):**
+```
+All files are formatted correctly!
+```
+
+**Output (needs formatting):**
+```
+! There are unformatted files. Run prisma format to format them.
+```
+
+Exits with code `1` when files need formatting.
+
+### Format custom schema
+
+```bash
+prisma format --schema=./database/schema.prisma
+```
+
+**Output:**
+```
+Prisma schema loaded from database/schema.prisma
+Formatted database/schema.prisma in 18ms 🚀
+```
+
+## What Gets Formatted
+
+The formatter applies consistent styling to:
+
+### 1. Indentation
+
+**Before:**
+```prisma
+model User {
+id Int @id
+name String
+}
+```
+
+**After:**
+```prisma
+model User {
+  id   Int    @id
+  name String
+}
+```
+
+### 2. Field Alignment
+
+**Before:**
+```prisma
+model User {
+  id Int @id @default(autoincrement())
+  email String @unique
+  name String?
+  createdAt DateTime @default(now())
+}
+```
+
+**After:**
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+}
+```
+
+### 3. Block Spacing
+
+**Before:**
+```prisma
+model User {
+  id Int @id
+}
+model Post {
+  id Int @id
+}
+```
+
+**After:**
+```prisma
+model User {
+  id Int @id
+}
+
+model Post {
+  id Int @id
+}
+```
+
+### 4. Comment Preservation
+
+**Before:**
+```prisma
+model User {
+  id Int @id // User ID
+  email String @unique     // User email address
+}
+```
+
+**After:**
+```prisma
+model User {
+  id    Int    @id @default(autoincrement()) // User ID
+  email String @unique                        // User email address
+}
+```
+
+Comments are preserved and properly aligned.
+
+### 5. Attribute Ordering
+
+**Before:**
+```prisma
+model User {
+  id Int @default(autoincrement()) @id
+}
+```
+
+**After:**
+```prisma
+model User {
+  id Int @id @default(autoincrement())
+}
+```
+
+Attributes are reordered for consistency (e.g., `@id` before `@default`).
+
+## Multi-File Schema Formatting
+
+When using multi-file schemas, all files are formatted:
+
+```bash
+prisma format
+```
+
+**Output:**
+```
+Prisma schemas loaded from prisma/base.prisma, prisma/user.prisma, prisma/post.prisma
+Formatted prisma/base.prisma in 12ms 🚀
+Formatted prisma/user.prisma in 8ms 🚀
+Formatted prisma/post.prisma in 6ms 🚀
+```
+
+## Integration with Development Workflow
+
+### Pre-commit Hook
+
+Format schema files before committing:
+
+```json
+// package.json
+{
+  "scripts": {
+    "precommit": "prisma format"
+  }
+}
+```
+
+### CI/CD Pipeline
+
+Check formatting in CI:
+
+```yaml
+# .github/workflows/format.yml
+name: Check Formatting
+
+on: [push, pull_request]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install
+      - run: npx prisma format --check
+```
+
+The `--check` flag causes the command to fail if files aren't formatted.
+
+### VS Code Integration
+
+The [Prisma VS Code extension](https://marketplace.visualstudio.com/items?itemName=Prisma.prisma) can format on save:
+
+```json
+// .vscode/settings.json
+{
+  "[prisma]": {
+    "editor.formatOnSave": true
+  }
+}
+```
+
+## Format on Generate
+
+The schema is automatically formatted when you run:
+
+```bash
+prisma generate
+```
+
+You don't need to manually format before generating.
+
+## Error Handling
+
+If the schema has syntax errors, formatting will fail:
+
+```bash
+prisma format
+```
+
+**Output:**
+```
+Error: 
+  --> schema.prisma:10
+   | 
+ 9 | model User {
+10 |   id Int @id @default(autoincrement()
+   |                                      ^
+Expected ")"
+```
+
+Fix the syntax errors first, then format:
+
+```bash
+prisma validate
+prisma format
+```
+
+## Formatting Rules
+
+The Prisma formatter follows these rules:
+
+1. **2-space indentation** for nested blocks
+2. **Align field types** in models and enums
+3. **Align attributes** on the same line
+4. **Single blank line** between top-level blocks
+5. **No trailing whitespace**
+6. **Consistent spacing** around operators and keywords
+7. **Preserve comments** with proper alignment
+8. **Sort attributes** by priority (e.g., `@id` before `@default`)
+
+## Exit Codes
+
+- `0` - Formatting successful (or already formatted with `--check`)
+- `1` - Formatting failed or files need formatting (with `--check`)
+
+## Related Commands
+
+- [`prisma validate`](/api/prisma-validate) - Validate schema before formatting
+- [`prisma generate`](/api/prisma-generate) - Generate Prisma Client (auto-formats)
+- [`prisma db pull`](/api/prisma-db) - Pull schema from database (auto-formats)

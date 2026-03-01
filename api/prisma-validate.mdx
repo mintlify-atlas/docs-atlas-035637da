@@ -1,0 +1,301 @@
+---
+title: 'prisma validate'
+description: 'Validate your Prisma schema for errors and warnings'
+---
+
+# prisma validate
+
+Validate your Prisma schema for syntax errors, configuration issues, and potential problems.
+
+## Usage
+
+```bash
+prisma validate [options]
+```
+
+## Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma validate --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma validate --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma validate --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+## Examples
+
+### Basic validation
+
+```bash
+prisma validate
+```
+
+**Output (valid schema):**
+```
+Prisma schema loaded from prisma/schema.prisma
+The schema at prisma/schema.prisma is valid 🚀
+```
+
+**Output (invalid schema):**
+```
+Prisma schema loaded from prisma/schema.prisma
+Error: 
+  --> schema.prisma:10
+   | 
+ 9 |   id    Int    @id @default(autoincrement())
+10 |   email String @unique
+   | 
+Error parsing attribute "@unique": The model `User` cannot use `@unique` on the `email` field because it doesn't have a unique constraint.
+```
+
+### Validate custom schema
+
+```bash
+prisma validate --schema=./database/schema.prisma
+```
+
+### Validate with custom config
+
+```bash
+prisma validate --config=./prisma.config.ts
+```
+
+## What Gets Validated
+
+The `validate` command checks:
+
+### 1. Syntax Errors
+
+- Proper Prisma schema syntax
+- Correct use of keywords and attributes
+- Valid field types and modifiers
+
+```prisma
+// Invalid: Missing @id
+model User {
+  name String
+}
+```
+
+### 2. Schema Structure
+
+- Required datasource and generator blocks
+- Valid model definitions
+- Proper relation syntax
+
+```prisma
+// Invalid: Missing datasource
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id Int @id @default(autoincrement())
+}
+```
+
+### 3. Relations
+
+- Valid relation fields
+- Correct referential actions
+- Proper foreign key definitions
+
+```prisma
+// Invalid: Missing relation fields
+model User {
+  id    Int    @id @default(autoincrement())
+  posts Post[] // Missing back-relation
+}
+
+model Post {
+  id Int @id @default(autoincrement())
+}
+```
+
+### 4. Native Database Types
+
+- Valid native type mappings for the provider
+- Supported database-specific features
+
+```prisma
+// Invalid: json type not supported on MySQL < 5.7
+model User {
+  id       Int  @id @default(autoincrement())
+  metadata Json
+}
+```
+
+### 5. Attributes and Directives
+
+- Correct attribute syntax
+- Valid attribute arguments
+- Compatible attribute combinations
+
+```prisma
+// Invalid: @default with @unique on relation field
+model User {
+  id      Int     @id @default(autoincrement())
+  profile Profile @default @unique // Can't use @default on relations
+}
+```
+
+### 6. Configuration
+
+- Valid datasource URL
+- Supported provider
+- Valid generator configuration
+
+## Linting Warnings
+
+In addition to errors, validation also shows linting warnings:
+
+```bash
+prisma validate
+```
+
+**Output with warnings:**
+```
+Prisma schema loaded from prisma/schema.prisma
+
+warn Prisma schema warning:
+  - The model `User` has a field `createdAt` that is not used in any relation. Consider adding @updatedAt to automatically set the value.
+
+The schema at prisma/schema.prisma is valid 🚀
+```
+
+Warnings don't prevent the schema from being valid but highlight potential improvements.
+
+## Exit Codes
+
+- `0` - Schema is valid
+- `1` - Schema has errors
+
+## Integration with Development Workflow
+
+### Pre-commit Hook
+
+Add validation to your pre-commit hooks:
+
+```json
+// package.json
+{
+  "scripts": {
+    "precommit": "prisma validate"
+  }
+}
+```
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/validate.yml
+name: Validate Schema
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install
+      - run: npx prisma validate
+```
+
+### IDE Integration
+
+The [Prisma VS Code extension](https://marketplace.visualstudio.com/items?itemName=Prisma.prisma) validates your schema in real-time as you type.
+
+## Common Validation Errors
+
+### Missing @id
+
+```
+Error: Each model must have at least one unique criteria that can be used to uniquely identify a record.
+Consider adding an `@id` or `@@id` attribute to the model.
+```
+
+**Fix:** Add an `@id` field:
+
+```prisma
+model User {
+  id   Int    @id @default(autoincrement())
+  name String
+}
+```
+
+### Invalid Relation
+
+```
+Error: The relation field `user` on model `Post` is missing an opposite relation field on the model `User`.
+```
+
+**Fix:** Add the back-relation:
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  posts Post[]
+}
+
+model Post {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
+```
+
+### Unsupported Type
+
+```
+Error: Native type `Json` is not supported for postgresql connector.
+```
+
+**Fix:** Use the correct native type for your database:
+
+```prisma
+model User {
+  id       Int  @id @default(autoincrement())
+  metadata Json @db.JsonB // Use JsonB for PostgreSQL
+}
+```
+
+## Multi-File Schema Validation
+
+When using multi-file schemas, `validate` checks all schema files:
+
+```bash
+prisma validate
+```
+
+**Output:**
+```
+Prisma schemas loaded from prisma/base.prisma, prisma/user.prisma, prisma/post.prisma
+The schemas at prisma/base.prisma are valid 🚀
+```
+
+## Related Commands
+
+- [`prisma format`](/api/prisma-format) - Format your schema
+- [`prisma generate`](/api/prisma-generate) - Generate Prisma Client (also validates)
+- [`prisma migrate dev`](/api/prisma-migrate) - Create migrations (also validates)

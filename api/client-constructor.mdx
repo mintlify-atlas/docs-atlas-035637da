@@ -1,0 +1,291 @@
+---
+title: PrismaClient Constructor
+description: Complete reference for PrismaClient constructor and initialization options
+---
+
+# PrismaClient Constructor
+
+The `PrismaClient` constructor initializes a new Prisma Client instance with the specified configuration options.
+
+## Constructor Signature
+
+```typescript
+class PrismaClient {
+  constructor(options: PrismaClientOptions)
+}
+```
+
+## PrismaClientOptions
+
+The constructor accepts a `PrismaClientOptions` object with the following properties:
+
+<ParamField path="adapter" type="SqlDriverAdapterFactory" required>
+  Instance of a Driver Adapter for connecting to your database.
+  
+  **Example:**
+  ```typescript
+  import { PrismaPg } from '@prisma/adapter-pg'
+  import pg from 'pg'
+  
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+  const adapter = new PrismaPg(pool)
+  
+  const prisma = new PrismaClient({ adapter })
+  ```
+  
+  **Available adapters:**
+  - `@prisma/adapter-pg` - PostgreSQL
+  - `@prisma/adapter-neon` - Neon serverless
+  - `@prisma/adapter-planetscale` - PlanetScale
+  - `@prisma/adapter-libsql` - Turso/libSQL
+  - `@prisma/adapter-d1` - Cloudflare D1
+  - `@prisma/adapter-better-sqlite3` - Better SQLite3
+  - `@prisma/adapter-mssql` - SQL Server
+  - `@prisma/adapter-mariadb` - MariaDB
+  
+  <Note>
+    The `adapter` and `accelerateUrl` options are mutually exclusive. You must provide one or the other.
+  </Note>
+</ParamField>
+
+<ParamField path="accelerateUrl" type="string">
+  Prisma Accelerate URL for connecting through Accelerate instead of a direct database connection.
+  
+  **Example:**
+  ```typescript
+  const prisma = new PrismaClient({
+    accelerateUrl: 'prisma://accelerate.prisma-data.net/?api_key=...'
+  })
+  ```
+  
+  <Note>
+    The `adapter` and `accelerateUrl` options are mutually exclusive.
+  </Note>
+</ParamField>
+
+<ParamField path="errorFormat" type="'pretty' | 'colorless' | 'minimal'" default="'colorless'">
+  Configures the formatting of error messages returned by Prisma Client.
+  
+  - `pretty` - Colorized error messages with code frames (not recommended for production)
+  - `colorless` - Plain text error messages with code frames
+  - `minimal` - Minimal error messages without code frames (recommended for production)
+  
+  **Default behavior:**
+  - In production (`NODE_ENV=production`): `'minimal'`
+  - When `NO_COLOR` is set: `'colorless'`
+  - Otherwise: `'colorless'`
+  
+  **Example:**
+  ```typescript
+  const prisma = new PrismaClient({
+    errorFormat: 'minimal'
+  })
+  ```
+</ParamField>
+
+<ParamField path="log" type="Array<LogLevel | LogDefinition>">
+  Configures logging for Prisma Client operations.
+  
+  **Log levels:** `'query'`, `'info'`, `'warn'`, `'error'`
+  
+  **Simple logging (to stdout):**
+  ```typescript
+  const prisma = new PrismaClient({
+    log: ['query', 'info', 'warn', 'error']
+  })
+  ```
+  
+  **Event-based logging:**
+  ```typescript
+  const prisma = new PrismaClient({
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'stdout', level: 'error' },
+      { emit: 'stdout', level: 'info' },
+      { emit: 'stdout', level: 'warn' }
+    ]
+  })
+  
+  prisma.$on('query', (e) => {
+    console.log('Query:', e.query)
+    console.log('Params:', e.params)
+    console.log('Duration:', e.duration, 'ms')
+  })
+  ```
+  
+  **LogDefinition type:**
+  ```typescript
+  type LogDefinition = {
+    level: 'info' | 'query' | 'warn' | 'error'
+    emit: 'stdout' | 'event'
+  }
+  ```
+</ParamField>
+
+<ParamField path="transactionOptions" type="TransactionOptions">
+  Default configuration for interactive transactions.
+  
+  ```typescript
+  type TransactionOptions = {
+    maxWait?: number      // default: 2000 (ms)
+    timeout?: number      // default: 5000 (ms)
+    isolationLevel?: IsolationLevel
+  }
+  
+  type IsolationLevel =
+    | 'ReadUncommitted'
+    | 'ReadCommitted'
+    | 'RepeatableRead'
+    | 'Serializable'
+    | 'Snapshot'
+  ```
+  
+  **Example:**
+  ```typescript
+  const prisma = new PrismaClient({
+    transactionOptions: {
+      maxWait: 5000,      // Wait up to 5s for transaction to start
+      timeout: 10000,     // Allow transaction to run for up to 10s
+      isolationLevel: 'Serializable'
+    }
+  })
+  ```
+  
+  - `maxWait` - Maximum time (in ms) to wait for a transaction to start
+  - `timeout` - Maximum time (in ms) for the transaction to run
+  - `isolationLevel` - Transaction isolation level (database-dependent)
+</ParamField>
+
+<ParamField path="omit" type="GlobalOmitOptions">
+  Globally omit specific fields from all query results.
+  
+  **Example:**
+  ```typescript
+  const prisma = new PrismaClient({
+    omit: {
+      user: {
+        password: true
+      }
+    }
+  })
+  
+  // The `password` field will be automatically excluded from all User queries
+  const user = await prisma.user.findUnique({ where: { id: 1 } })
+  // user.password is undefined
+  ```
+</ParamField>
+
+<ParamField path="comments" type="SqlCommenterPlugin[]">
+  SQL commenter plugins that add metadata to SQL queries as comments following the [sqlcommenter format](https://google.github.io/sqlcommenter/).
+  
+  **Example:**
+  ```typescript
+  import { traceContext } from '@prisma/sqlcommenter-trace-context'
+  import { queryInsights } from '@prisma/sqlcommenter-query-insights'
+  
+  const prisma = new PrismaClient({
+    adapter,
+    comments: [
+      traceContext(),
+      queryInsights()
+    ]
+  })
+  ```
+  
+  **Available plugins:**
+  - `@prisma/sqlcommenter-trace-context` - Adds W3C Trace Context
+  - `@prisma/sqlcommenter-query-insights` - Adds query shape information
+  - `@prisma/sqlcommenter-query-tags` - Adds custom query tags
+</ParamField>
+
+## Instance Methods
+
+After instantiation, the PrismaClient instance provides these core methods:
+
+### $connect()
+
+Manually establishes a connection to the database.
+
+```typescript
+await prisma.$connect()
+```
+
+<Note>
+  Prisma Client automatically connects on the first query, so calling `$connect()` is optional.
+</Note>
+
+### $disconnect()
+
+Closes the database connection and cleans up resources.
+
+```typescript
+await prisma.$disconnect()
+```
+
+<Warning>
+  Always call `$disconnect()` when your application shuts down to prevent connection leaks.
+</Warning>
+
+### $on()
+
+Registers an event listener for log events or the `beforeExit` event.
+
+```typescript
+prisma.$on(eventType: string, callback: Function)
+```
+
+**Example:**
+```typescript
+prisma.$on('query', (e) => {
+  console.log('Query:', e.query)
+  console.log('Duration:', e.duration, 'ms')
+})
+
+prisma.$on('beforeExit', async () => {
+  console.log('Prisma Client is shutting down')
+  // Perform cleanup
+})
+```
+
+## Complete Example
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import pg from 'pg'
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL
+})
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(pool),
+  errorFormat: 'minimal',
+  log: [
+    { emit: 'event', level: 'query' },
+    { emit: 'stdout', level: 'error' }
+  ],
+  transactionOptions: {
+    maxWait: 5000,
+    timeout: 10000,
+    isolationLevel: 'ReadCommitted'
+  }
+})
+
+prisma.$on('query', (e) => {
+  console.log(`Query took ${e.duration}ms`)
+})
+
+// Use the client
+const users = await prisma.user.findMany()
+
+// Clean up
+await prisma.$disconnect()
+```
+
+## See Also
+
+- [Driver Adapters](/adapters/overview)
+- [Error Handling](/client/error-handling)
+- [Transactions](/api/transaction-api)
+- [Logging](/client/middleware)

@@ -1,0 +1,690 @@
+---
+title: Data Modeling
+description: Complete guide to data modeling in Prisma - relations, types, constraints, and best practices
+---
+
+Data modeling in Prisma involves defining your application's data structure, relationships, and constraints using Prisma Schema Language (PSL). This guide covers everything you need to know about effective data modeling.
+
+## Core Concepts
+
+### Models
+
+Models represent entities in your application domain:
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+}
+```
+
+Each model:
+- Maps to a database table
+- Defines fields with types and constraints
+- Can have relations to other models
+
+### Fields
+
+Fields are the properties of a model:
+
+```prisma
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String   // Required string
+  content   String?  // Optional string
+  published Boolean  @default(false)
+  tags      String[] // Array of strings
+  metadata  Json     // JSON data
+  createdAt DateTime @default(now())
+}
+```
+
+## Data Types
+
+### Scalar Types
+
+Prisma provides built-in scalar types:
+
+<Tabs>
+  <Tab title="String">
+    Text data of any length:
+    
+    ```prisma
+    model User {
+      id       Int    @id
+      name     String
+      email    String @unique
+      bio      String @db.Text // For longer text
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Numbers">
+    Integer and floating-point numbers:
+    
+    ```prisma
+    model Product {
+      id       Int     @id
+      quantity Int     // 32-bit integer
+      price    Float   // Floating point
+      views    BigInt  // 64-bit integer
+      exact    Decimal @db.Decimal(10, 2) // Precise decimals
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Boolean">
+    True or false values:
+    
+    ```prisma
+    model User {
+      id        Int     @id
+      isActive  Boolean @default(true)
+      isAdmin   Boolean @default(false)
+      verified  Boolean?
+    }
+    ```
+  </Tab>
+  
+  <Tab title="DateTime">
+    Date and time values:
+    
+    ```prisma
+    model Event {
+      id          Int      @id
+      scheduledAt DateTime
+      createdAt   DateTime @default(now())
+      updatedAt   DateTime @updatedAt
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Json">
+    Arbitrary JSON data:
+    
+    ```prisma
+    model User {
+      id       Int   @id
+      settings Json  // Any JSON object
+      metadata Json?
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Bytes">
+    Binary data:
+    
+    ```prisma
+    model File {
+      id      Int   @id
+      content Bytes
+      hash    Bytes?
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Composite Types
+
+MongoDB supports embedded documents:
+
+```prisma
+type Address {
+  street  String
+  city    String
+  zipCode String
+  country String
+}
+
+model User {
+  id      String  @id @map("_id")
+  email   String  @unique
+  address Address
+}
+```
+
+## Relations
+
+Relations define connections between models.
+
+### One-to-Many Relations
+
+One record relates to many records:
+
+```prisma
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  posts Post[] // One user has many posts
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId Int    // Foreign key
+}
+```
+
+Key points:
+- `Post.author` is the **relation field** (not stored in DB)
+- `Post.authorId` is the **foreign key** (stored in DB)
+- `User.posts` is the **back-relation** (virtual field)
+
+### One-to-One Relations
+
+One record relates to exactly one other record:
+
+```prisma
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  profile Profile? // One user has one profile
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String
+  user   User   @relation(fields: [userId], references: [id])
+  userId Int    @unique // Unique makes it one-to-one
+}
+```
+
+The `@unique` constraint on the foreign key makes it one-to-one.
+
+### Many-to-Many Relations
+
+Many records relate to many other records.
+
+#### Implicit Many-to-Many
+
+Prisma manages the join table:
+
+```prisma
+model Post {
+  id         Int        @id @default(autoincrement())
+  title      String
+  categories Category[] // Many posts have many categories
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String
+  posts Post[] // Many categories have many posts
+}
+```
+
+#### Explicit Many-to-Many
+
+You manage the join table for additional fields:
+
+```prisma
+model User {
+  id        Int                @id @default(autoincrement())
+  email     String             @unique
+  courses   CourseEnrollment[]
+}
+
+model Course {
+  id      Int                @id @default(autoincrement())
+  name    String
+  members CourseEnrollment[]
+}
+
+model CourseEnrollment {
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  course    Course   @relation(fields: [courseId], references: [id])
+  courseId  Int
+  role      String   // Additional field
+  enrolledAt DateTime @default(now())
+
+  @@id([userId, courseId]) // Composite primary key
+}
+```
+
+### Self-Relations
+
+A model can relate to itself:
+
+```prisma
+model User {
+  id        Int    @id @default(autoincrement())
+  name      String
+  
+  // Manager relationship
+  manager   User?  @relation("UserManager", fields: [managerId], references: [id])
+  managerId Int?
+  reports   User[] @relation("UserManager")
+}
+```
+
+### Multiple Relations Between Same Models
+
+Use named relations:
+
+```prisma
+model User {
+  id            Int          @id @default(autoincrement())
+  email         String       @unique
+  
+  writtenPosts  Post[]       @relation("PostAuthor")
+  reviewedPosts Post[]       @relation("PostReviewer")
+}
+
+model Post {
+  id         Int   @id @default(autoincrement())
+  title      String
+  
+  author     User  @relation("PostAuthor", fields: [authorId], references: [id])
+  authorId   Int
+  
+  reviewer   User? @relation("PostReviewer", fields: [reviewerId], references: [id])
+  reviewerId Int?
+}
+```
+
+## Real-World Example
+
+Here's a complete e-learning platform data model:
+
+```prisma
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  social    Json?    // Social media links
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  courses     CourseEnrollment[]
+  testResults TestResult[]       @relation(name: "StudentResults")
+  testsGraded TestResult[]       @relation(name: "GradedBy")
+  tokens      Token[]
+  
+  @@index([email])
+}
+
+model Token {
+  id         Int       @id @default(autoincrement())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  type       TokenType
+  emailToken String?   @unique
+  valid      Boolean   @default(true)
+  expiration DateTime
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  
+  @@index([userId])
+}
+
+model Course {
+  id            Int     @id @default(autoincrement())
+  name          String
+  courseDetails String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members CourseEnrollment[]
+  tests   Test[]
+}
+
+model CourseEnrollment {
+  createdAt DateTime @default(now())
+  role      UserRole
+
+  userId   Int
+  courseId Int
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, courseId])
+  @@index([userId, role])
+}
+
+model Test {
+  id        Int      @id @default(autoincrement())
+  name      String
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseId    Int
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  testResults TestResult[]
+  
+  @@index([courseId])
+}
+
+model TestResult {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  result    Int      // Score (percentage * 10)
+
+  studentId Int
+  student   User @relation(name: "StudentResults", fields: [studentId], references: [id])
+  graderId  Int
+  gradedBy  User @relation(name: "GradedBy", fields: [graderId], references: [id])
+  testId    Int
+  test      Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  
+  @@index([studentId])
+  @@index([testId])
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+}
+
+enum TokenType {
+  EMAIL
+  API
+}
+```
+
+## Constraints and Indexes
+
+### Primary Keys
+
+Every model needs a unique identifier:
+
+```prisma
+model User {
+  // Single field primary key
+  id Int @id @default(autoincrement())
+}
+
+model UserProfile {
+  // Composite primary key
+  userId   Int
+  provider String
+  
+  @@id([userId, provider])
+}
+```
+
+### Unique Constraints
+
+Enforce uniqueness:
+
+```prisma
+model User {
+  id    Int    @id
+  
+  // Single field unique
+  email String @unique
+  
+  // Composite unique constraint
+  firstName String
+  lastName  String
+  
+  @@unique([firstName, lastName])
+}
+```
+
+### Indexes
+
+Improve query performance:
+
+```prisma
+model Post {
+  id       Int    @id
+  title    String
+  authorId Int
+  status   String
+  
+  // Single column index
+  @@index([authorId])
+  
+  // Composite index
+  @@index([status, authorId])
+  
+  // Named index
+  @@index([title], name: "post_title_idx")
+}
+```
+
+### Foreign Key Actions
+
+Control cascade behavior:
+
+```prisma
+model Post {
+  id       Int    @id
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  authorId Int
+}
+```
+
+Available actions:
+- `Cascade` - Delete/update related records
+- `Restrict` - Prevent if related records exist
+- `NoAction` - Database default behavior
+- `SetNull` - Set foreign key to NULL
+- `SetDefault` - Set foreign key to default value
+
+## Default Values
+
+Set default values for fields:
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String   @default("Anonymous")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  status    Status   @default(PENDING)
+  uuid      String   @default(uuid())
+  cuid      String   @default(cuid())
+}
+
+enum Status {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+```
+
+Available functions:
+- `autoincrement()` - Auto-incrementing integer
+- `now()` - Current timestamp
+- `uuid()` - UUID v4
+- `cuid()` - CUID
+- `dbgenerated("expression")` - Database-generated value
+
+## Field Validation
+
+While Prisma doesn't provide built-in validation, you can use:
+
+### Database-Level Constraints
+
+```prisma
+model User {
+  id    Int    @id
+  email String @unique @db.VarChar(255)
+  age   Int    @db.SmallInt
+}
+```
+
+### Application-Level Validation
+
+```typescript
+import { z } from 'zod'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+const UserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2).max(100),
+  age: z.number().int().min(0).max(120),
+})
+
+async function createUser(data: unknown) {
+  const validated = UserSchema.parse(data)
+  return prisma.user.create({ data: validated })
+}
+```
+
+## Naming Conventions
+
+### Model Names
+
+```prisma
+// ✅ Good - Singular PascalCase
+model User { }
+model BlogPost { }
+model OrderItem { }
+
+// ❌ Bad
+model users { }      // Lowercase
+model blog_post { }  // Snake case
+model OrderItems { } // Plural
+```
+
+### Field Names
+
+```prisma
+model User {
+  // ✅ Good - camelCase
+  id Int @id
+  firstName String
+  emailAddress String
+  
+  // ❌ Bad
+  first_name String  // Snake case
+  EmailAddress String // PascalCase
+}
+```
+
+### Map to Database Names
+
+If your database uses different conventions:
+
+```prisma
+model User {
+  id        Int    @id
+  firstName String @map("first_name")
+  lastName  String @map("last_name")
+  
+  @@map("users") // Map to 'users' table
+}
+```
+
+## Best Practices
+
+### 1. Always Use Timestamps
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+### 2. Index Foreign Keys
+
+```prisma
+model Post {
+  id       Int @id
+  authorId Int
+  
+  @@index([authorId]) // Index for faster joins
+}
+```
+
+### 3. Use Enums for Fixed Sets
+
+```prisma
+// ✅ Good
+enum UserRole {
+  ADMIN
+  USER
+  GUEST
+}
+
+model User {
+  role UserRole @default(USER)
+}
+
+// ❌ Bad - Using strings
+model User {
+  role String @default("user")
+}
+```
+
+### 4. Normalize Data Appropriately
+
+```prisma
+// ✅ Good - Normalized
+model User {
+  id      Int      @id
+  address Address?
+}
+
+model Address {
+  id     Int    @id
+  street String
+  city   String
+  user   User   @relation(fields: [userId], references: [id])
+  userId Int    @unique
+}
+
+// Sometimes acceptable - Denormalized for performance
+model User {
+  id           Int    @id
+  addressJson  Json   // Embedded address
+}
+```
+
+### 5. Use Cascade Deletes Carefully
+
+```prisma
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId Int
+}
+// When user is deleted, all posts are deleted
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prisma Schema" icon="code" href="/concepts/schema">
+    Deep dive into schema syntax
+  </Card>
+  <Card title="Relations" icon="link" href="/guides/relations">
+    Advanced relation patterns
+  </Card>
+  <Card title="Migrations" icon="arrow-right-arrow-left" href="/concepts/migrations">
+    Apply schema changes to database
+  </Card>
+  <Card title="Prisma Client" icon="brackets-curly" href="/concepts/client">
+    Query your data model
+  </Card>
+</CardGroup>

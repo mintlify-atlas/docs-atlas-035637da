@@ -1,0 +1,467 @@
+---
+title: 'Attributes'
+description: 'Model and field attributes for constraints, indexes, and database mappings.'
+---
+
+## Overview
+
+Attributes modify the behavior of fields and models. Field attributes start with `@`, while model (block) attributes start with `@@`.
+
+## Field Attributes
+
+### @id
+
+Defines the primary key:
+
+```prisma
+model User {
+  id Int @id @default(autoincrement())
+}
+```
+
+### @default
+
+Sets default value for a field:
+
+```prisma
+model Post {
+  id        Int      @id @default(autoincrement())
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  uuid      String   @default(uuid())
+  cuid      String   @default(cuid())
+}
+```
+
+Default functions:
+- `autoincrement()` - Auto-incrementing integer
+- `now()` - Current timestamp
+- `uuid()` - Generate UUID
+- `cuid()` - Generate CUID
+- `dbgenerated("SQL")` - Database default expression
+
+```prisma
+model Status {
+  id        BigInt @id @default(dbgenerated("timestamp_id('statuses'::text)"))
+}
+```
+
+### @unique
+
+Ensures field values are unique:
+
+```prisma
+model User {
+  id    Int    @id
+  email String @unique
+  slug  String @unique
+}
+```
+
+Named unique constraint:
+
+```prisma
+model User {
+  id      Int    @id
+  email   String @unique(map: "unique_user_email")
+}
+```
+
+### @relation
+
+Defines relationships between models:
+
+```prisma
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+```
+
+With referential actions:
+
+```prisma
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+```
+
+Referential actions:
+- `Cascade` - Delete/update related records
+- `NoAction` - Prevent the operation
+- `SetNull` - Set foreign key to null
+- `SetDefault` - Set to default value
+- `Restrict` - Prevent the operation (similar to NoAction)
+
+Named relations (for multiple relations):
+
+```prisma
+model User {
+  id              Int              @id
+  writtenPosts    Post[]           @relation("author")
+  favoritePosts   Post[]           @relation("favorites")
+}
+
+model Post {
+  id              Int    @id
+  authorId        Int
+  author          User   @relation("author", fields: [authorId], references: [id])
+  favoritedBy     User[] @relation("favorites")
+}
+```
+
+### @map
+
+Maps field name to different column name:
+
+```prisma
+model User {
+  id         Int    @id
+  firstName  String @map("first_name")
+  lastName   String @map("last_name")
+
+  @@map("users")
+}
+```
+
+### @updatedAt
+
+Automatically updates timestamp on record modification:
+
+```prisma
+model Post {
+  id        Int      @id
+  title     String
+  updatedAt DateTime @updatedAt
+}
+```
+
+### @db
+
+Specifies native database type:
+
+```prisma
+model Post {
+  id      Int     @id
+  title   String  @db.VarChar(255)
+  content String  @db.Text
+  price   Decimal @db.Decimal(10, 2)
+  data    Bytes   @db.ByteA
+}
+```
+
+Provider-specific types:
+
+**PostgreSQL:**
+```prisma
+model Example {
+  id        Int      @id
+  text      String   @db.Text
+  varchar   String   @db.VarChar(255)
+  uuid      String   @db.Uuid
+  inet      String   @db.Inet
+  citext    String   @db.Citext
+  json      Json     @db.JsonB
+  timestamp DateTime @db.Timestamptz
+}
+```
+
+**MySQL:**
+```prisma
+model Example {
+  id       Int    @id
+  text     String @db.Text
+  longText String @db.LongText
+  varchar  String @db.VarChar(255)
+  tinyInt  Int    @db.TinyInt
+}
+```
+
+**SQL Server:**
+```prisma
+model Example {
+  id       Int    @id
+  nvarchar String @db.NVarChar(255)
+  text     String @db.NVarChar(Max)
+}
+```
+
+### @ignore
+
+Excludes field from Prisma Client:
+
+```prisma
+model User {
+  id       Int    @id
+  email    String
+  internal String @ignore
+}
+```
+
+## Model Attributes
+
+### @@id
+
+Defines composite primary key:
+
+```prisma
+model CourseEnrollment {
+  userId   Int
+  courseId Int
+  role     String
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@id([userId, courseId])
+}
+```
+
+Named composite primary key:
+
+```prisma
+model Assignment {
+  courseId  Int
+  studentId Int
+
+  @@id([courseId, studentId], name: "assignment_id")
+}
+```
+
+### @@unique
+
+Defines unique constraint on multiple fields:
+
+```prisma
+model User {
+  id        Int    @id
+  firstName String
+  lastName  String
+  email     String
+
+  @@unique([firstName, lastName])
+  @@unique([email])
+}
+```
+
+Named unique constraint:
+
+```prisma
+model Post {
+  id       Int    @id
+  slug     String
+  tenantId Int
+
+  @@unique([slug, tenantId], map: "unique_slug_per_tenant")
+}
+```
+
+### @@index
+
+Creates database index:
+
+```prisma
+model Post {
+  id       Int      @id
+  title    String
+  authorId Int
+  status   String
+  created  DateTime
+
+  @@index([authorId])
+  @@index([status, created])
+}
+```
+
+Named index:
+
+```prisma
+model User {
+  id    Int    @id
+  email String
+  name  String
+
+  @@index([email], map: "idx_user_email")
+  @@index([name, email], map: "idx_user_name_email")
+}
+```
+
+Index with sort order:
+
+```prisma
+model Notification {
+  id        Int      @id
+  userId    Int
+  createdAt DateTime
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+```
+
+### @@map
+
+Maps model name to different table name:
+
+```prisma
+model BlogPost {
+  id    Int    @id
+  title String
+
+  @@map("blog_posts")
+}
+```
+
+### @@ignore
+
+Excludes model from Prisma Client:
+
+```prisma
+model InternalLog {
+  id      Int    @id
+  message String
+
+  @@ignore
+}
+```
+
+Useful for:
+- Legacy tables not used in application
+- Temporary migration tables
+- Database views not managed by Prisma
+
+## Complete Examples
+
+### User Authentication
+
+```prisma
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    Int      @map("user_id")
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+```
+
+### E-commerce Products
+
+```prisma
+model Product {
+  id          Int      @id @default(autoincrement())
+  sku         String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([sku])
+  @@index([active, createdAt])
+  @@map("products")
+}
+```
+
+### Social Media
+
+```prisma
+model Post {
+  id              Int      @id @default(autoincrement())
+  content         String   @db.Text
+  authorId        Int      @map("author_id")
+  published       Boolean  @default(false)
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    Like[]
+
+  @@index([authorId])
+  @@index([published, publishedAt])
+  @@map("posts")
+}
+
+model Like {
+  userId    Int      @map("user_id")
+  postId    Int      @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@map("likes")
+}
+```
+
+### Multi-tenant Application
+
+```prisma
+model Tenant {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users User[]
+  posts Post[]
+
+  @@map("tenants")
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  email    String @db.VarChar(255)
+  tenantId Int    @map("tenant_id")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([email, tenantId])
+  @@index([tenantId])
+  @@map("users")
+}
+```
+
+## Best Practices
+
+1. Always use `@id` or `@@id` for primary keys
+2. Add `@unique` constraints for fields that should be unique
+3. Use `@default(autoincrement())` for auto-generated IDs
+4. Include `@default(now())` and `@updatedAt` for timestamps
+5. Use `@@map` to match existing database naming conventions
+6. Add `@@index` on foreign keys and frequently queried fields
+7. Use named constraints with `map:` for better database management
+8. Specify referential actions (`onDelete`, `onUpdate`) explicitly
+9. Use `@db` attributes for database-specific optimizations
+10. Consider composite keys with `@@id` for join tables

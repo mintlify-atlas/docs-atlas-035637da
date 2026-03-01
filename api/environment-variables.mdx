@@ -1,0 +1,415 @@
+---
+title: 'Environment Variables'
+description: 'Using environment variables in Prisma configuration'
+---
+
+## Overview
+
+Prisma provides the `env()` helper function to safely access environment variables in your configuration files. This replaces the `env()` function previously used in `schema.prisma` datasource blocks.
+
+## The env() Function
+
+### Import
+
+```typescript
+import { env } from '@prisma/config'
+```
+
+### Basic Usage
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL')
+  }
+})
+```
+
+## Function Signature
+
+```typescript
+function env(name: string): string
+```
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  The name of the environment variable to read.
+</ParamField>
+
+### Return Value
+
+Returns the string value of the environment variable.
+
+### Errors
+
+Throws `PrismaConfigEnvError` if:
+- The environment variable is not defined
+- The environment variable is an empty string
+
+## Error Handling
+
+The `env()` function throws a `PrismaConfigEnvError` when an environment variable cannot be resolved:
+
+```typescript
+import { env, PrismaConfigEnvError } from '@prisma/config'
+
+try {
+  const url = env('DATABASE_URL')
+} catch (error) {
+  if (error instanceof PrismaConfigEnvError) {
+    console.error(`Missing environment variable: ${error.message}`)
+  }
+}
+```
+
+Error message format:
+```
+Cannot resolve environment variable: <VARIABLE_NAME>.
+```
+
+## Loading Environment Variables
+
+<Warning>
+Prisma 7 does not automatically load `.env` files. You must load environment variables explicitly.
+</Warning>
+
+### Using dotenv
+
+Load environment variables using `dotenv` at the top of your config file:
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL')
+  }
+})
+```
+
+### Using dotenv with Custom Path
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import { config } from 'dotenv'
+
+// Load from custom .env file
+config({ path: '.env.local' })
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL')
+  }
+})
+```
+
+### Multiple Environment Files
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import { config } from 'dotenv'
+
+// Load multiple env files
+config({ path: '.env' })
+config({ path: '.env.local', override: true })
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+    shadowDatabaseUrl: env('SHADOW_DATABASE_URL')
+  }
+})
+```
+
+## Common Patterns
+
+### Database Connection URL
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL')
+  }
+})
+```
+
+`.env` file:
+```bash
+DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+```
+
+### Multiple Database URLs
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+    shadowDatabaseUrl: env('SHADOW_DATABASE_URL')
+  }
+})
+```
+
+`.env` file:
+```bash
+DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+SHADOW_DATABASE_URL="postgresql://user:password@localhost:5432/shadow"
+```
+
+### Environment-Specific Configuration
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+const isProduction = process.env.NODE_ENV === 'production'
+
+export default defineConfig({
+  datasource: {
+    url: env(isProduction ? 'PRODUCTION_DATABASE_URL' : 'DATABASE_URL')
+  },
+  migrations: {
+    path: isProduction ? './migrations' : './dev-migrations'
+  }
+})
+```
+
+### Direct Access to process.env
+
+You can also access `process.env` directly for more complex logic:
+
+```typescript
+import { defineConfig } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL || 'file:./dev.db'
+  }
+})
+```
+
+<Note>
+Using `env()` is recommended over direct `process.env` access because it provides better error messages when variables are missing.
+</Note>
+
+## Type Safety
+
+### Basic Type Safety
+
+The `env()` function is typed to return `string`:
+
+```typescript
+const url: string = env('DATABASE_URL')
+```
+
+### Custom Environment Type
+
+You can define a custom environment type for better autocomplete:
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+interface Env {
+  DATABASE_URL: string
+  SHADOW_DATABASE_URL: string
+  NODE_ENV: 'development' | 'production' | 'test'
+}
+
+export default defineConfig({
+  datasource: {
+    url: env<Env>('DATABASE_URL'),
+    shadowDatabaseUrl: env<Env>('SHADOW_DATABASE_URL')
+  }
+})
+```
+
+## Best Practices
+
+### 1. Always Load Environment Variables First
+
+```typescript
+// ✅ Good: Load dotenv before using env()
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+export default defineConfig({
+  datasource: { url: env('DATABASE_URL') }
+})
+
+// ❌ Bad: env() called before loading .env
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: { url: env('DATABASE_URL') }
+})
+import 'dotenv/config' // Too late!
+```
+
+### 2. Use env() for Required Variables
+
+```typescript
+// ✅ Good: Use env() to ensure variable exists
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL') // Throws if missing
+  }
+})
+
+// ❌ Bad: Silent failure with fallback
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL || '' // Empty string causes issues
+  }
+})
+```
+
+### 3. Provide Clear Variable Names
+
+```typescript
+// ✅ Good: Descriptive names
+env('DATABASE_URL')
+env('SHADOW_DATABASE_URL')
+env('PRISMA_QUERY_ENGINE_BINARY')
+
+// ❌ Bad: Unclear names
+env('DB')
+env('URL')
+env('VAR1')
+```
+
+### 4. Document Required Variables
+
+Create a `.env.example` file to document all required environment variables:
+
+```bash
+# .env.example
+
+# Database connection URL
+DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+
+# Shadow database for migrations
+SHADOW_DATABASE_URL="postgresql://user:password@localhost:5432/shadow"
+```
+
+## SQLite Connection URLs
+
+<Note>
+SQLite database URLs are resolved relative to the config file location, not the schema file.
+</Note>
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+import 'dotenv/config'
+
+// Config at /project/prisma.config.ts
+export default defineConfig({
+  datasource: {
+    url: 'file:./dev.db' // Resolves to /project/dev.db
+  }
+})
+```
+
+`.env` file:
+```bash
+DATABASE_URL="file:./data/dev.db"
+```
+
+## Platform-Specific Considerations
+
+### Vercel
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('POSTGRES_PRISMA_URL') // Vercel Postgres connection pooler
+  }
+})
+```
+
+### Railway
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL')
+  }
+})
+```
+
+### Docker
+
+```typescript
+import { defineConfig, env } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL') // Set via docker-compose.yml
+  }
+})
+```
+
+`docker-compose.yml`:
+```yaml
+services:
+  app:
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/mydb
+```
+
+## Troubleshooting
+
+### Variable Not Found
+
+**Error:**
+```
+PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL.
+```
+
+**Solutions:**
+1. Ensure `.env` file exists
+2. Verify `dotenv` is loaded before using `env()`
+3. Check variable name spelling
+4. Confirm variable is not empty
+
+### Empty String Values
+
+**Error:**
+```
+PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL.
+```
+
+**Cause:** The environment variable exists but is set to an empty string.
+
+**Solution:** Provide a non-empty value:
+```bash
+# ❌ Bad
+DATABASE_URL=""
+
+# ✅ Good
+DATABASE_URL="postgresql://localhost:5432/mydb"
+```
+
+### Variable Not Loaded
+
+**Symptom:** `env()` throws error even though `.env` file exists.
+
+**Solution:** Ensure `dotenv/config` is imported:
+```typescript
+import 'dotenv/config' // Must be at the top
+import { defineConfig, env } from '@prisma/config'
+```

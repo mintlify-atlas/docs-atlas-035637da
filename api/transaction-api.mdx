@@ -1,0 +1,500 @@
+---
+title: Transaction API
+description: Complete reference for Prisma Client transaction methods and options
+---
+
+# Transaction API
+
+Prisma Client provides robust transaction support through the `$transaction` method, supporting both sequential batch transactions and interactive transactions.
+
+## $transaction Method
+
+The `$transaction` method executes multiple operations as a single atomic unit.
+
+```typescript
+$transaction(
+  input: PrismaPromise[] | ((tx: PrismaClient) => Promise<any>),
+  options?: TransactionOptions
+): Promise<any>
+```
+
+---
+
+## Batch Transactions
+
+Execute multiple operations sequentially in a single transaction.
+
+### Signature
+
+```typescript
+$transaction(operations: PrismaPromise[]): Promise<any[]>
+```
+
+### Basic Usage
+
+```typescript
+const [user, posts] = await prisma.$transaction([
+  prisma.user.create({
+    data: { email: 'alice@prisma.io', name: 'Alice' }
+  }),
+  prisma.post.findMany({
+    where: { published: true }
+  })
+])
+```
+
+### Characteristics
+
+<ParamField path="operations" type="PrismaPromise[]" required>
+  Array of Prisma Client operations to execute in sequence.
+  
+  <Warning>
+    **Do not await** the operations before passing them to `$transaction`. Pass the promises directly.
+  </Warning>
+  
+  ```typescript
+  // ✅ Correct
+  await prisma.$transaction([
+    prisma.user.create({ data }),
+    prisma.post.update({ where, data })
+  ])
+  
+  // ❌ Wrong - don't await individual operations
+  await prisma.$transaction([
+    await prisma.user.create({ data }),
+    await prisma.post.update({ where, data })
+  ])
+  ```
+</ParamField>
+
+<ResponseField name="return" type="Promise<any[]>">
+  Returns an array containing the results of each operation in order.
+</ResponseField>
+
+### Advanced Example
+
+```typescript
+try {
+  const result = await prisma.$transaction([
+    // Transfer money between accounts
+    prisma.account.update({
+      where: { id: fromAccountId },
+      data: { balance: { decrement: amount } }
+    }),
+    prisma.account.update({
+      where: { id: toAccountId },
+      data: { balance: { increment: amount } }
+    }),
+    // Log the transaction
+    prisma.transactionLog.create({
+      data: {
+        from: fromAccountId,
+        to: toAccountId,
+        amount
+      }
+    })
+  ])
+  
+  console.log('Transaction completed:', result)
+} catch (error) {
+  console.error('Transaction failed, all changes rolled back:', error)
+}
+```
+
+### Options
+
+```typescript
+$transaction(
+  operations: PrismaPromise[],
+  options?: {
+    isolationLevel?: IsolationLevel
+  }
+): Promise<any[]>
+```
+
+<ParamField path="options.isolationLevel" type="IsolationLevel">
+  Database transaction isolation level.
+  
+  ```typescript
+  type IsolationLevel =
+    | 'ReadUncommitted'
+    | 'ReadCommitted'
+    | 'RepeatableRead'
+    | 'Serializable'
+    | 'Snapshot'
+  ```
+  
+  **Example:**
+  ```typescript
+  await prisma.$transaction(
+    [operation1, operation2],
+    { isolationLevel: 'Serializable' }
+  )
+  ```
+  
+  <Note>
+    Available isolation levels depend on your database. Not all databases support all levels.
+  </Note>
+</ParamField>
+
+---
+
+## Interactive Transactions
+
+Execute complex transaction logic with full control flow, including conditional operations and loops.
+
+### Signature
+
+```typescript
+$transaction<R>(
+  callback: (tx: PrismaClient) => Promise<R>,
+  options?: {
+    maxWait?: number
+    timeout?: number
+    isolationLevel?: IsolationLevel
+  }
+): Promise<R>
+```
+
+### Basic Usage
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  // All operations use 'tx' instead of 'prisma'
+  const user = await tx.user.create({
+    data: { email: 'alice@prisma.io', name: 'Alice' }
+  })
+  
+  const posts = await tx.post.createMany({
+    data: [
+      { title: 'Post 1', authorId: user.id },
+      { title: 'Post 2', authorId: user.id }
+    ]
+  })
+  
+  return { user, posts }
+})
+```
+
+### Callback Parameter
+
+<ParamField path="callback" type="(tx: PrismaClient) => Promise<R>" required>
+  Async function that receives a transaction-aware Prisma Client instance.
+  
+  The `tx` parameter is a special Prisma Client instance that:
+  - Executes all operations within the transaction
+  - Is isolated from the main Prisma Client instance
+  - Automatically commits on successful completion
+  - Automatically rolls back if an error is thrown
+  
+  <Warning>
+    Always use the `tx` parameter inside the transaction callback, not the main `prisma` client.
+  </Warning>
+</ParamField>
+
+<ResponseField name="return" type="Promise<R>">
+  Returns the value returned by the callback function.
+</ResponseField>
+
+### Transaction Options
+
+<ParamField path="options.maxWait" type="number" default="2000">
+  Maximum time (in milliseconds) to wait for the transaction to start.
+  
+  ```typescript
+  await prisma.$transaction(
+    async (tx) => { /* ... */ },
+    { maxWait: 5000 }  // Wait up to 5 seconds
+  )
+  ```
+  
+  Throws an error if the transaction cannot start within this time.
+</ParamField>
+
+<ParamField path="options.timeout" type="number" default="5000">
+  Maximum time (in milliseconds) for the transaction to complete.
+  
+  ```typescript
+  await prisma.$transaction(
+    async (tx) => { /* ... */ },
+    { timeout: 10000 }  // Transaction must complete within 10 seconds
+  )
+  ```
+  
+  The transaction is automatically rolled back if it exceeds this timeout.
+</ParamField>
+
+<ParamField path="options.isolationLevel" type="IsolationLevel">
+  Transaction isolation level (same as batch transactions).
+</ParamField>
+
+### Complete Options Example
+
+```typescript
+const result = await prisma.$transaction(
+  async (tx) => {
+    // Your transaction logic
+  },
+  {
+    maxWait: 5000,               // Wait up to 5s to start
+    timeout: 10000,              // Must complete within 10s
+    isolationLevel: 'Serializable'
+  }
+)
+```
+
+---
+
+## Advanced Usage
+
+### Conditional Operations
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  const user = await tx.user.findUnique({
+    where: { email: 'alice@prisma.io' }
+  })
+  
+  if (user) {
+    // Update existing user
+    return tx.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() }
+    })
+  } else {
+    // Create new user
+    return tx.user.create({
+      data: {
+        email: 'alice@prisma.io',
+        name: 'Alice'
+      }
+    })
+  }
+})
+```
+
+### Loops and Iterations
+
+```typescript
+const userIds = [1, 2, 3, 4, 5]
+
+const updatedUsers = await prisma.$transaction(async (tx) => {
+  const results = []
+  
+  for (const userId of userIds) {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { points: { increment: 10 } }
+    })
+    results.push(user)
+  }
+  
+  return results
+})
+```
+
+### Error Handling
+
+```typescript
+try {
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { email: 'alice@prisma.io' }
+    })
+    
+    // Check business logic
+    if (user.email.includes('spam')) {
+      // Throw to rollback
+      throw new Error('Email not allowed')
+    }
+    
+    await tx.post.create({
+      data: { title: 'Welcome', authorId: user.id }
+    })
+  })
+} catch (error) {
+  console.error('Transaction rolled back:', error)
+  // All changes are automatically rolled back
+}
+```
+
+### Using Query Results
+
+```typescript
+const stats = await prisma.$transaction(async (tx) => {
+  const userCount = await tx.user.count()
+  const avgAge = await tx.user.aggregate({
+    _avg: { age: true }
+  })
+  
+  // Create audit record based on results
+  await tx.auditLog.create({
+    data: {
+      event: 'STATS_CALCULATED',
+      metadata: {
+        userCount,
+        avgAge: avgAge._avg.age
+      }
+    }
+  })
+  
+  return { userCount, avgAge: avgAge._avg.age }
+})
+```
+
+---
+
+## Nested Transactions
+
+Prisma supports nested interactive transactions using savepoints.
+
+```typescript
+const result = await prisma.$transaction(async (outerTx) => {
+  const user = await outerTx.user.create({
+    data: { email: 'alice@prisma.io' }
+  })
+  
+  // Nested transaction
+  const profile = await outerTx.$transaction(async (innerTx) => {
+    return innerTx.profile.create({
+      data: {
+        userId: user.id,
+        bio: 'Hello world'
+      }
+    })
+  })
+  
+  return { user, profile }
+})
+```
+
+<Note>
+  Nested transactions use database savepoints internally. The outer transaction commits only if all nested transactions succeed.
+</Note>
+
+<Warning>
+  MongoDB does not support nested transactions.
+</Warning>
+
+---
+
+## Transaction Isolation Levels
+
+Different databases support different isolation levels:
+
+| Isolation Level | PostgreSQL | MySQL | SQL Server | SQLite |
+|----------------|------------|-------|------------|--------|
+| ReadUncommitted | ✅ | ✅ | ✅ | ❌ |
+| ReadCommitted | ✅ | ✅ | ✅ | ❌ |
+| RepeatableRead | ✅ | ✅ | ✅ | ❌ |
+| Serializable | ✅ | ✅ | ✅ | ✅ |
+| Snapshot | ❌ | ❌ | ✅ | ❌ |
+
+### Isolation Level Descriptions
+
+- **ReadUncommitted**: Lowest isolation, allows dirty reads
+- **ReadCommitted**: Prevents dirty reads (default for most databases)
+- **RepeatableRead**: Prevents dirty and non-repeatable reads
+- **Serializable**: Highest isolation, prevents all phenomena
+- **Snapshot**: SQL Server specific, provides repeatable read with row versioning
+
+---
+
+## Database-Specific Notes
+
+### PostgreSQL
+
+```typescript
+// PostgreSQL supports all standard isolation levels
+await prisma.$transaction(
+  async (tx) => { /* ... */ },
+  { isolationLevel: 'RepeatableRead' }
+)
+```
+
+### MySQL
+
+```typescript
+// MySQL defaults to RepeatableRead
+await prisma.$transaction(
+  async (tx) => { /* ... */ },
+  { isolationLevel: 'ReadCommitted' }
+)
+```
+
+### SQLite
+
+```typescript
+// SQLite only supports Serializable
+await prisma.$transaction(async (tx) => {
+  // All operations are serializable by default
+})
+```
+
+### MongoDB
+
+<Warning>
+  MongoDB has limited transaction support:
+  - Requires replica set configuration
+  - Does not support nested transactions
+  - Limited to batch transactions only
+</Warning>
+
+### Cloudflare D1
+
+<Warning>
+  Cloudflare D1 does **not** support interactive transactions. Use batch transactions only:
+  
+  ```typescript
+  // ✅ Supported
+  await prisma.$transaction([
+    prisma.user.create({ data }),
+    prisma.post.create({ data })
+  ])
+  
+  // ❌ Not supported
+  await prisma.$transaction(async (tx) => {
+    // This will throw an error
+  })
+  ```
+</Warning>
+
+---
+
+## Best Practices
+
+1. **Keep transactions short**: Long-running transactions hold database locks and can impact performance.
+
+2. **Use appropriate isolation levels**: Higher isolation levels provide more consistency but reduce concurrency.
+
+3. **Handle errors explicitly**: Always use try/catch when transactions might fail.
+
+4. **Avoid external API calls**: Don't make HTTP requests or other I/O inside transactions.
+
+5. **Use batch transactions when possible**: They're simpler and often more performant than interactive transactions.
+
+6. **Set appropriate timeouts**: Adjust `maxWait` and `timeout` based on your workload.
+
+```typescript
+// ✅ Good: Short, focused transaction
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({ data })
+  await tx.profile.create({ data: { userId: user.id } })
+})
+
+// ❌ Bad: External API call in transaction
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({ data })
+  await fetch('https://api.example.com/notify')  // Don't do this!
+  await tx.profile.create({ data: { userId: user.id } })
+})
+```
+
+---
+
+## See Also
+
+- [CRUD Methods](/api/crud-methods)
+- [Error Handling](/client/error-handling)
+- [Connection Pooling](/guides/connection-pooling)
+- [Driver Adapters](/adapters/overview)

@@ -1,0 +1,518 @@
+---
+title: Prisma Configuration
+description: Complete guide to prisma.config.ts - TypeScript-based configuration for datasources, migrations, and experimental features
+---
+
+Prisma 7 introduces `prisma.config.ts`, a TypeScript-based configuration file that replaces environment-based configuration. This provides type safety, IDE autocomplete, and better developer experience.
+
+## What is prisma.config.ts?
+
+`prisma.config.ts` is a TypeScript file at the root of your project that configures:
+
+- **Datasource**: Database connection settings
+- **Schema location**: Path to your Prisma schema
+- **Migrations**: Migration directory and seeding
+- **Experimental features**: Feature flags
+- **External tables**: Tables managed outside Prisma
+- **Views and TypedSQL**: Advanced database features
+
+## Basic Configuration
+
+Create a `prisma.config.ts` file at your project root:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: 'postgresql://user:password@localhost:5432/mydb',
+  },
+})
+```
+
+### Using Environment Variables
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+})
+```
+
+### SQLite with Relative Paths
+
+For SQLite, paths are relative to the config file:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: 'file:./dev.db',
+  },
+})
+```
+
+## Configuration Options
+
+### Datasource
+
+Configure your database connection:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
+  },
+})
+```
+
+<Accordion title="Datasource Properties">
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | `string` | Main database connection URL |
+| `shadowDatabaseUrl` | `string` | Shadow database for migration validation |
+
+</Accordion>
+
+### Schema Location
+
+Specify where your Prisma schema is located:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  // Single file
+  schema: './database/schema.prisma',
+  
+  // Or directory for multi-file schemas
+  schema: './prisma',
+})
+```
+
+Default locations (if not specified):
+- `./prisma/schema.prisma`
+- `./schema.prisma`
+- Any `.prisma` files in `./prisma` directory
+
+### Migrations
+
+Configure migration behavior:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  migrations: {
+    path: './database/migrations',
+    seed: 'tsx prisma/seed.ts',
+    initShadowDb: './scripts/init-shadow.sql',
+  },
+})
+```
+
+<Accordion title="Migration Properties">
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `path` | `string` | Directory for migration files (default: `./prisma/migrations`) |
+| `seed` | `string` | Command to seed the database after migrations |
+| `initShadowDb` | `string` | SQL script to setup external tables in shadow database |
+
+</Accordion>
+
+#### Database Seeding
+
+The `seed` command runs after migrations:
+
+```typescript prisma.config.ts
+export default defineConfig({
+  migrations: {
+    seed: 'node prisma/seed.js',
+  },
+})
+```
+
+```javascript prisma/seed.js
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  await prisma.user.create({
+    data: {
+      email: 'admin@example.com',
+      name: 'Admin User',
+    },
+  })
+}
+
+main()
+  .then(() => prisma.$disconnect())
+  .catch((e) => {
+    console.error(e)
+    prisma.$disconnect()
+    process.exit(1)
+  })
+```
+
+### External Tables
+
+Mark tables as externally managed (not modified by Prisma Migrate):
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  experimental: {
+    externalTables: true,
+  },
+  tables: {
+    external: ['analytics_events', 'audit_log'],
+  },
+  migrations: {
+    initShadowDb: './scripts/setup-external-tables.sql',
+  },
+})
+```
+
+<Warning>
+External tables require `experimental.externalTables: true` to be enabled.
+</Warning>
+
+External tables are:
+- Included in your Prisma schema
+- Available in Prisma Client
+- Not modified by migrations
+- Must be set up via `initShadowDb` for shadow database
+
+### External Enums
+
+Similar to external tables, for enums:
+
+```typescript prisma.config.ts
+export default defineConfig({
+  experimental: {
+    externalTables: true,
+  },
+  enums: {
+    external: ['user_status', 'order_state'],
+  },
+})
+```
+
+### Views
+
+Configure database views:
+
+```typescript prisma.config.ts
+export default defineConfig({
+  views: {
+    path: './prisma/views',
+  },
+})
+```
+
+View SQL files in `./prisma/views/`:
+
+```sql prisma/views/active_users.sql
+SELECT id, email, name
+FROM users
+WHERE deleted_at IS NULL
+```
+
+### TypedSQL
+
+Configure TypedSQL query location:
+
+```typescript prisma.config.ts
+export default defineConfig({
+  typedSql: {
+    path: './prisma/queries',
+  },
+})
+```
+
+### Experimental Features
+
+Enable experimental features:
+
+```typescript prisma.config.ts
+export default defineConfig({
+  experimental: {
+    externalTables: true,
+    extensions: true,
+  },
+})
+```
+
+<Accordion title="Experimental Features">
+
+| Feature | Description |
+|---------|-------------|
+| `externalTables` | Enable external tables and enums |
+| `extensions` | Enable Prisma Client extensions in config |
+
+</Accordion>
+
+## Complete Example
+
+Here's a full configuration example:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  // Database connection
+  datasource: {
+    url: process.env.DATABASE_URL,
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
+  },
+
+  // Schema location
+  schema: './prisma/schema.prisma',
+
+  // Migration configuration
+  migrations: {
+    path: './prisma/migrations',
+    seed: 'tsx prisma/seed.ts',
+    initShadowDb: './prisma/init-shadow.sql',
+  },
+
+  // External tables managed outside Prisma
+  tables: {
+    external: ['legacy_analytics', 'third_party_data'],
+  },
+
+  // External enums
+  enums: {
+    external: ['legacy_status'],
+  },
+
+  // Views configuration
+  views: {
+    path: './prisma/views',
+  },
+
+  // TypedSQL queries
+  typedSql: {
+    path: './prisma/queries',
+  },
+
+  // Enable experimental features
+  experimental: {
+    externalTables: true,
+  },
+})
+```
+
+## Type Definitions
+
+The `PrismaConfig` type is fully typed for IDE autocomplete:
+
+```typescript
+type PrismaConfig = {
+  experimental?: {
+    externalTables?: boolean
+    extensions?: boolean
+  }
+  datasource?: {
+    url?: string
+    shadowDatabaseUrl?: string
+  }
+  schema?: string
+  migrations?: {
+    path?: string
+    initShadowDb?: string
+    seed?: string
+  }
+  tables?: {
+    external?: string[]
+  }
+  enums?: {
+    external?: string[]
+  }
+  views?: {
+    path?: string
+  }
+  typedSql?: {
+    path?: string
+  }
+}
+```
+
+## Custom Config Location
+
+By default, Prisma looks for `prisma.config.ts` at the project root. You can specify a custom location:
+
+```bash
+prisma generate --config ./config/database.config.ts
+prisma migrate dev --config ./config/database.config.ts
+```
+
+## Multiple Configurations
+
+For different environments, use separate config files:
+
+```typescript prisma.config.dev.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: 'postgresql://localhost:5432/mydb_dev',
+  },
+})
+```
+
+```typescript prisma.config.prod.ts
+import { defineConfig } from '@prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+})
+```
+
+Then use the `--config` flag:
+
+```bash
+prisma migrate deploy --config prisma.config.prod.ts
+```
+
+## Configuration Validation
+
+Prisma validates your configuration at runtime:
+
+```typescript
+// Error: extensions config requires experimental.extensions
+export default defineConfig({
+  extensions: someExtension, // ❌ Error
+})
+
+// Correct:
+export default defineConfig({
+  experimental: {
+    extensions: true,
+  },
+  extensions: someExtension, // ✅ Valid
+})
+```
+
+## Internal Configuration
+
+The config system uses `PrismaConfigInternal` internally, which includes:
+
+```typescript
+type PrismaConfigInternal = PrismaConfig & {
+  loadedFromFile: string | null
+}
+```
+
+This tracks which file the configuration was loaded from.
+
+## Migration from .env
+
+Prisma 7 removes automatic `.env` loading. Migrate from:
+
+```
+# .env (old approach)
+DATABASE_URL="postgresql://localhost:5432/mydb"
+```
+
+To:
+
+```typescript prisma.config.ts
+import { defineConfig } from '@prisma/config'
+import dotenv from 'dotenv'
+
+// Explicitly load .env if needed
+dotenv.config()
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+})
+```
+
+<Note>
+For production, use your platform's environment variable system directly instead of `.env` files.
+</Note>
+
+## Best Practices
+
+### 1. Use Environment Variables for Secrets
+
+```typescript
+// ✅ Good
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+})
+
+// ❌ Bad - hardcoded credentials
+export default defineConfig({
+  datasource: {
+    url: 'postgresql://user:password@localhost:5432/db',
+  },
+})
+```
+
+### 2. Use Relative Paths for SQLite
+
+```typescript
+// ✅ Good - portable
+export default defineConfig({
+  datasource: {
+    url: 'file:./dev.db',
+  },
+})
+
+// ❌ Bad - absolute path
+export default defineConfig({
+  datasource: {
+    url: 'file:/Users/john/project/dev.db',
+  },
+})
+```
+
+### 3. Validate Required Environment Variables
+
+```typescript
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required')
+}
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prisma Schema" icon="code" href="/concepts/schema">
+    Learn about the Prisma Schema Language
+  </Card>
+  <Card title="Migrations" icon="arrow-right-arrow-left" href="/concepts/migrations">
+    Understand database migrations
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore Prisma's architecture
+  </Card>
+  <Card title="Data Model" icon="database" href="/concepts/data-model">
+    Design your data model
+  </Card>
+</CardGroup>

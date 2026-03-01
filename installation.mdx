@@ -1,0 +1,481 @@
+---
+title: Installation
+description: Complete installation guide for Prisma ORM with all package managers
+---
+
+# Installation
+
+This guide covers how to install Prisma ORM in your project using your preferred package manager.
+
+## System requirements
+
+Before installing Prisma, ensure your system meets these requirements:
+
+- **Node.js**: Version 20.19+, 22.12+, or 24.0+
+- **TypeScript**: Version 5.4.0 or higher (optional, but recommended)
+- **Package manager**: npm, yarn, pnpm, or bun
+
+<Note>
+  Prisma ORM works with both JavaScript and TypeScript, but TypeScript is recommended for the best developer experience with full type safety.
+</Note>
+
+## Installation methods
+
+Prisma consists of two main packages:
+
+1. **`prisma`** - The Prisma CLI for database migrations, schema management, and client generation
+2. **`@prisma/client`** - The Prisma Client runtime for querying your database
+
+You'll typically install the CLI as a development dependency and the client as a regular dependency.
+
+## Install with npm
+
+npm is the default package manager that comes with Node.js.
+
+### Install Prisma CLI
+
+```bash
+npm install prisma --save-dev
+```
+
+### Install Prisma Client
+
+```bash
+npm install @prisma/client
+```
+
+### Install both packages
+
+```bash
+npm install prisma --save-dev
+npm install @prisma/client
+```
+
+## Install with Yarn
+
+Yarn is a popular alternative package manager with improved performance and security.
+
+### Install Prisma CLI
+
+```bash
+yarn add prisma --dev
+```
+
+### Install Prisma Client
+
+```bash
+yarn add @prisma/client
+```
+
+### Install both packages
+
+```bash
+yarn add prisma --dev
+yarn add @prisma/client
+```
+
+## Install with pnpm
+
+pnpm is a fast, disk-efficient package manager that's gaining popularity, especially in monorepos.
+
+<Tip>
+  Prisma itself is developed using pnpm. The Prisma repository requires pnpm version 10.15 or higher (but less than version 11).
+</Tip>
+
+### Install Prisma CLI
+
+```bash
+pnpm add -D prisma
+```
+
+### Install Prisma Client
+
+```bash
+pnpm add @prisma/client
+```
+
+### Install both packages
+
+```bash
+pnpm add -D prisma
+pnpm add @prisma/client
+```
+
+## Install with Bun
+
+Bun is an all-in-one JavaScript runtime and toolkit with a built-in package manager.
+
+### Install Prisma CLI
+
+```bash
+bun add -D prisma
+```
+
+### Install Prisma Client
+
+```bash
+bun add @prisma/client
+```
+
+### Install both packages
+
+```bash
+bun add -D prisma
+bun add @prisma/client
+```
+
+<Note>
+  Bun automatically loads `.env` files, so you don't need to import `dotenv/config` in your Prisma configuration when using Bun.
+</Note>
+
+## Install database adapters
+
+Prisma uses driver adapters to connect to databases. Install the appropriate adapter for your database:
+
+### PostgreSQL
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-pg pg
+```
+
+```bash yarn
+yarn add @prisma/adapter-pg pg
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-pg pg
+```
+
+```bash bun
+bun add @prisma/adapter-pg pg
+```
+</CodeGroup>
+
+### Neon (Serverless PostgreSQL)
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-neon @neondatabase/serverless
+```
+
+```bash yarn
+yarn add @prisma/adapter-neon @neondatabase/serverless
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-neon @neondatabase/serverless
+```
+
+```bash bun
+bun add @prisma/adapter-neon @neondatabase/serverless
+```
+</CodeGroup>
+
+### PlanetScale (Serverless MySQL)
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-planetscale @planetscale/database
+```
+
+```bash yarn
+yarn add @prisma/adapter-planetscale @planetscale/database
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-planetscale @planetscale/database
+```
+
+```bash bun
+bun add @prisma/adapter-planetscale @planetscale/database
+```
+</CodeGroup>
+
+### SQLite
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-better-sqlite3 better-sqlite3
+```
+
+```bash yarn
+yarn add @prisma/adapter-better-sqlite3 better-sqlite3
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-better-sqlite3 better-sqlite3
+```
+
+```bash bun
+bun add @prisma/adapter-better-sqlite3 better-sqlite3
+```
+</CodeGroup>
+
+### LibSQL (Turso)
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-libsql @libsql/client
+```
+
+```bash yarn
+yarn add @prisma/adapter-libsql @libsql/client
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-libsql @libsql/client
+```
+
+```bash bun
+bun add @prisma/adapter-libsql @libsql/client
+```
+</CodeGroup>
+
+### Cloudflare D1
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-d1
+```
+
+```bash yarn
+yarn add @prisma/adapter-d1
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-d1
+```
+
+```bash bun
+bun add @prisma/adapter-d1
+```
+</CodeGroup>
+
+### MySQL/MariaDB
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-mysql mysql2
+```
+
+```bash yarn
+yarn add @prisma/adapter-mysql mysql2
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-mysql mysql2
+```
+
+```bash bun
+bun add @prisma/adapter-mysql mysql2
+```
+</CodeGroup>
+
+### SQL Server
+
+<CodeGroup>
+```bash npm
+npm install @prisma/adapter-mssql mssql
+```
+
+```bash yarn
+yarn add @prisma/adapter-mssql mssql
+```
+
+```bash pnpm
+pnpm add @prisma/adapter-mssql mssql
+```
+
+```bash bun
+bun add @prisma/adapter-mssql mssql
+```
+</CodeGroup>
+
+## Verify installation
+
+After installation, verify that Prisma is installed correctly:
+
+```bash
+npx prisma --version
+```
+
+You should see output showing the Prisma version, like:
+
+```
+prisma                  : 7.5.0
+@prisma/client          : 7.5.0
+```
+
+## Next steps
+
+Now that Prisma is installed, you're ready to start using it:
+
+<Steps>
+  <Step title="Create your schema">
+    Set up a `prisma/schema.prisma` file to define your data models.
+  </Step>
+
+  <Step title="Configure connection">
+    Create a `prisma.config.ts` file with your database connection details.
+  </Step>
+
+  <Step title="Generate Prisma Client">
+    Run `npx prisma generate` to create your type-safe database client.
+  </Step>
+
+  <Step title="Start querying">
+    Import and use Prisma Client in your application.
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card 
+    title="Follow the Quickstart" 
+    icon="bolt" 
+    href="/quickstart"
+  >
+    Step-by-step guide to build your first Prisma application
+  </Card>
+  <Card 
+    title="Read the Schema Reference" 
+    icon="book"
+  >
+    Learn about all the schema syntax and options
+  </Card>
+</CardGroup>
+
+## Prisma configuration file
+
+Prisma 7 uses a TypeScript configuration file for database connections and settings. Create a `prisma.config.ts` file:
+
+```typescript prisma.config.ts
+import { defineConfig, env } from 'prisma/config'
+
+type Env = {
+  DATABASE_URL: string
+}
+
+export default defineConfig({
+  datasource: {
+    url: env<Env>('DATABASE_URL'),
+  },
+})
+```
+
+The `env` function provides type-safe access to environment variables and throws an error if required variables are missing at runtime.
+
+<Note>
+  Unlike Prisma 6 and earlier, Prisma 7 does not automatically load `.env` files. Use packages like `dotenv` or `@dotenvx/dotenvx` to load environment variables, or use Node.js built-in `--env-file` flag.
+</Note>
+
+## Loading environment variables
+
+To load environment variables from a `.env` file:
+
+### Using dotenv
+
+Install dotenv:
+
+<CodeGroup>
+```bash npm
+npm install dotenv
+```
+
+```bash yarn
+yarn add dotenv
+```
+
+```bash pnpm
+pnpm add dotenv
+```
+
+```bash bun
+bun add dotenv
+```
+</CodeGroup>
+
+Import it in your config:
+
+```typescript prisma.config.ts
+import 'dotenv/config'
+import { defineConfig, env } from 'prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+  },
+})
+```
+
+### Using Node.js --env-file flag
+
+Node.js 20.6+ supports loading environment variables directly:
+
+```bash
+node --env-file=.env index.js
+```
+
+Or with tsx:
+
+```bash
+tsx --env-file=.env index.ts
+```
+
+### Using Bun
+
+Bun automatically loads `.env` files, so no additional configuration is needed.
+
+## Updating Prisma
+
+To update Prisma to the latest version:
+
+<CodeGroup>
+```bash npm
+npm install prisma@latest --save-dev
+npm install @prisma/client@latest
+```
+
+```bash yarn
+yarn upgrade prisma@latest --dev
+yarn upgrade @prisma/client@latest
+```
+
+```bash pnpm
+pnpm update prisma@latest -D
+pnpm update @prisma/client@latest
+```
+
+```bash bun
+bun update prisma@latest -D
+bun update @prisma/client@latest
+```
+</CodeGroup>
+
+<Tip>
+  Always keep both `prisma` and `@prisma/client` at the same version to avoid compatibility issues.
+</Tip>
+
+## Troubleshooting
+
+### Version mismatch
+
+If you encounter errors about version mismatches, ensure both packages are at the same version:
+
+```bash
+npx prisma --version
+```
+
+Both should show the same version number.
+
+### TypeScript errors
+
+If you see TypeScript errors after installation, ensure you have TypeScript 5.4.0 or higher:
+
+```bash
+npx tsc --version
+```
+
+### Missing native dependencies
+
+Some database adapters require native dependencies. For example, `better-sqlite3` requires build tools. On error, follow the package's installation instructions for your platform.

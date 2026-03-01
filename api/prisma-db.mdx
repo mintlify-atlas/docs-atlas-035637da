@@ -1,0 +1,474 @@
+---
+title: 'prisma db'
+description: 'Manage your database schema and lifecycle with Prisma DB commands'
+---
+
+# prisma db
+
+Manage your database schema and lifecycle.
+
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `prisma db push` | Push schema state to database without migrations |
+| `prisma db pull` | Pull database state to Prisma schema using introspection |
+| `prisma db seed` | Seed your database with test data |
+
+---
+
+## prisma db push
+
+Push the state from your Prisma schema to your database without using migrations.
+
+### Usage
+
+```bash
+prisma db push [options]
+```
+
+The datasource URL configuration is read from the Prisma config file (e.g., `prisma.config.ts`).
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma db push --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma db push --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma db push --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Override the datasource URL from the Prisma config file.
+  
+  ```bash
+  prisma db push --url="postgresql://user:password@localhost:5432/mydb"
+  ```
+</ParamField>
+
+<ParamField path="--accept-data-loss" type="boolean">
+  Ignore data loss warnings and proceed with the push.
+  
+  ```bash
+  prisma db push --accept-data-loss
+  ```
+</ParamField>
+
+<ParamField path="--force-reset" type="boolean">
+  Force a reset of the database before push. **All data will be lost.**
+  
+  ```bash
+  prisma db push --force-reset
+  ```
+</ParamField>
+
+### Examples
+
+#### Basic push
+
+```bash
+prisma db push
+```
+
+**Output:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+🚀 Your database is now in sync with your Prisma schema. Done in 234ms
+```
+
+#### Schema already in sync
+
+```bash
+prisma db push
+```
+
+**Output:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+The database is already in sync with the Prisma schema.
+```
+
+#### With data loss warning
+
+```bash
+prisma db push
+```
+
+**Interactive prompt:**
+```
+⚠️  There might be data loss when applying the changes:
+
+  • The column `email` on the `User` table would be dropped and recreated. This will lead to data loss.
+
+Do you want to ignore the warning(s)? › (y/N)
+```
+
+#### Accept data loss automatically
+
+```bash
+prisma db push --accept-data-loss
+```
+
+#### Force reset before push
+
+```bash
+prisma db push --force-reset
+```
+
+⚠️ **Warning:** This drops all data before applying changes.
+
+### When to Use db push
+
+- **Prototyping:** Rapidly iterate on schema during early development
+- **Local development:** Quick schema updates without migration files
+- **Serverless:** Environments where migration files aren't practical
+- **Small projects:** When migration history isn't needed
+
+### db push vs migrate dev
+
+| Feature | `db push` | `migrate dev` |
+|---------|-----------|---------------|
+| Migration files | ❌ No | ✅ Yes |
+| History tracking | ❌ No | ✅ Yes |
+| Team collaboration | ❌ Limited | ✅ Full |
+| Production use | ❌ Not recommended | ✅ Recommended |
+| Speed | ✅ Fast | Slower |
+| Prototyping | ✅ Ideal | Overkill |
+
+---
+
+## prisma db pull
+
+Pull the state from the database to the Prisma schema using introspection.
+
+### Usage
+
+```bash
+prisma db pull [options]
+```
+
+The datasource URL configuration is read from the Prisma config file (e.g., `prisma.config.ts`).
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma db pull --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma db pull --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--schema" type="string">
+  Custom path to your Prisma schema.
+  
+  ```bash
+  prisma db pull --schema=./prisma/schema.prisma
+  ```
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Override the datasource URL from the Prisma config file.
+  
+  ```bash
+  prisma db pull --url="postgresql://user:password@localhost:5432/mydb"
+  ```
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Ignore current Prisma schema file and overwrite it completely.
+  
+  ```bash
+  prisma db pull --force
+  ```
+</ParamField>
+
+<ParamField path="--print" type="boolean">
+  Print the introspected Prisma schema to stdout instead of writing to file.
+  
+  ```bash
+  prisma db pull --print
+  ```
+</ParamField>
+
+<ParamField path="--composite-type-depth" type="number">
+  Specify the depth for introspecting composite types (e.g., Embedded Documents in MongoDB).
+  
+  Default is `-1` (infinite depth), `0` disables composite types.
+  
+  ```bash
+  prisma db pull --composite-type-depth=2
+  ```
+</ParamField>
+
+<ParamField path="--schemas" type="string">
+  Specify database schemas to introspect (comma-separated). Overrides schemas in datasource block.
+  
+  ```bash
+  prisma db pull --schemas=public,auth,analytics
+  ```
+</ParamField>
+
+### Examples
+
+#### Basic pull
+
+```bash
+prisma db pull
+```
+
+**Output:**
+```
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "mydb" at "localhost:5432"
+
+✔ Introspected 3 models and wrote them into prisma/schema.prisma in 156ms
+
+Run prisma generate to generate Prisma Client.
+```
+
+#### Print to stdout
+
+```bash
+prisma db pull --print
+```
+
+Outputs the introspected schema to stdout instead of writing to file.
+
+#### Force overwrite
+
+```bash
+prisma db pull --force
+```
+
+Completely overwrites your existing schema file. Use with caution.
+
+#### Specify schemas
+
+```bash
+prisma db pull --schemas=public,auth
+```
+
+Introspects only the `public` and `auth` schemas.
+
+#### Set composite type depth
+
+```bash
+prisma db pull --composite-type-depth=2
+```
+
+Limits MongoDB embedded document depth to 2 levels.
+
+### When to Use db pull
+
+- **Existing database:** Import schema from an existing database
+- **Database-first workflow:** Database is source of truth
+- **Schema synchronization:** Update Prisma schema after manual DB changes
+- **Migration from other ORMs:** Convert existing schema to Prisma
+
+### Introspection Warnings
+
+You may see warnings about unsupported features:
+
+```
+⚠️  Warnings:
+
+  • These fields were commented out because they currently are not supported by Prisma.
+  • Enums "user_role" and "post_status" were duplicated. This is not supported by Prisma.
+```
+
+---
+
+## prisma db seed
+
+Seed your database with test or initial data.
+
+### Usage
+
+```bash
+prisma db seed [options]
+```
+
+### Options
+
+<ParamField path="--help" type="boolean">
+  Display help message.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma db seed --help
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma db seed --config=./prisma.config.ts
+  ```
+</ParamField>
+
+### Passing Arguments to Seed Script
+
+You can pass extra arguments to your seed script using `--`:
+
+```bash
+prisma db seed -- --arg1 value1 --arg2 value2
+```
+
+### Examples
+
+#### Basic seed
+
+```bash
+prisma db seed
+```
+
+**Output:**
+```
+🌱  The seed command has been executed.
+```
+
+#### Pass arguments to seed script
+
+```bash
+prisma db seed -- --env production --count 100
+```
+
+### Configuration
+
+Configure seeding in your `prisma.config.ts`:
+
+```typescript
+// prisma.config.ts
+import { defineConfig } from 'prisma'
+
+export default defineConfig({
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+  migrations: {
+    seed: 'bun ./prisma/seed.ts',
+  },
+})
+```
+
+The seed command can be any executable:
+
+```typescript
+// Node.js
+seed: 'node ./prisma/seed.js'
+
+// TypeScript with ts-node
+seed: 'ts-node ./prisma/seed.ts'
+
+// Bun
+seed: 'bun ./prisma/seed.ts'
+
+// Deno
+seed: 'deno run -A ./prisma/seed.ts'
+```
+
+### Example Seed Script
+
+```typescript
+// prisma/seed.ts
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  // Create users
+  const alice = await prisma.user.create({
+    data: {
+      email: 'alice@prisma.io',
+      name: 'Alice',
+    },
+  })
+
+  const bob = await prisma.user.create({
+    data: {
+      email: 'bob@prisma.io',
+      name: 'Bob',
+    },
+  })
+
+  console.log({ alice, bob })
+}
+
+main()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })
+```
+
+### No Seed Command Configured
+
+If no seed command is configured:
+
+```bash
+prisma db seed
+```
+
+**Output:**
+```
+⚠️ No seed command configured
+
+To seed your database, add a seed property to the migrations section in your Prisma config file.
+
+Example
+
+  // prisma.config.ts
+  export default defineConfig({
+    migrations: {
+      seed: 'bun ./prisma/seed.ts',
+    },
+    datasource: {
+      url: '[your database URL]',
+    },
+  })
+```
+
+## Related Commands
+
+- [`prisma migrate dev`](/api/prisma-migrate) - Create and apply migrations
+- [`prisma migrate deploy`](/api/prisma-migrate) - Deploy migrations to production
+- [`prisma generate`](/api/prisma-generate) - Generate Prisma Client

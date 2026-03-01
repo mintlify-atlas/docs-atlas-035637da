@@ -1,0 +1,406 @@
+---
+title: Connection Pooling
+description: Managing database connections efficiently with Prisma ORM
+---
+
+## Overview
+
+Connection pooling is critical for application performance and scalability. Prisma 7 uses JavaScript driver adapters that provide flexible connection management strategies.
+
+## Why Connection Pooling Matters
+
+Database connections are expensive resources:
+
+- **Connection overhead**: Each connection requires memory and CPU
+- **Database limits**: Most databases have connection limits (PostgreSQL default: 100)
+- **Network latency**: Establishing connections takes time
+- **Resource exhaustion**: Too many connections can crash your database
+
+<Warning>
+Exceeding connection limits causes errors:
+```
+Error querying the database: FATAL: sorry, too many clients already
+```
+</Warning>
+
+## Driver Adapter Pooling
+
+Prisma 7 uses JavaScript driver adapters with built-in connection pooling.
+
+### PostgreSQL (node-postgres)
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@prisma/client'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,                    // Maximum pool size
+  min: 5,                     // Minimum pool size
+  idleTimeoutMillis: 30000,   // Close idle connections after 30s
+  connectionTimeoutMillis: 5000, // Timeout for acquiring connection
+})
+
+const adapter = new PrismaPg({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+### Neon Serverless
+
+Neon provides built-in pooling optimized for serverless:
+
+```typescript
+import { PrismaNeon } from '@prisma/adapter-neon'
+import { Pool } from '@neondatabase/serverless'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
+
+const adapter = new PrismaNeon({ pool })
+const prisma = new PrismaClient({ adapter })
+```
+
+<Tip>
+Neon's serverless driver automatically handles connection pooling and is optimized for edge environments.
+</Tip>
+
+### PlanetScale
+
+PlanetScale uses HTTP-based connections:
+
+```typescript
+import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
+import { Client } from '@planetscale/database'
+
+const client = new Client({
+  url: process.env.DATABASE_URL,
+})
+
+const adapter = new PrismaPlanetScale(client)
+const prisma = new PrismaClient({ adapter })
+```
+
+## Pool Size Configuration
+
+### Calculating Optimal Pool Size
+
+Formula for web applications:
+
+```
+connections = ((core_count * 2) + effective_spindle_count)
+```
+
+For modern SSDs (no spindles):
+
+```typescript
+import os from 'os'
+
+const cpuCount = os.cpus().length
+const poolSize = cpuCount * 2 + 1
+
+const pool = new Pool({
+  max: poolSize,
+  min: Math.floor(poolSize / 2),
+})
+```
+
+### Environment-Specific Configuration
+
+**Development**
+```typescript
+const pool = new Pool({
+  max: 5,  // Low pool size for development
+  min: 1,
+})
+```
+
+**Production**
+```typescript
+const pool = new Pool({
+  max: 20,  // Higher pool size for production
+  min: 5,
+  idleTimeoutMillis: 30000,
+})
+```
+
+**Serverless**
+```typescript
+const pool = new Pool({
+  max: 1,  // Single connection per Lambda instance
+  min: 0,
+  idleTimeoutMillis: 1,  // Aggressive cleanup
+})
+```
+
+<Warning>
+For serverless, use external connection poolers like PgBouncer or Neon's built-in pooling to avoid connection exhaustion.
+</Warning>
+
+## Serverless Environments
+
+### AWS Lambda
+
+Serverless functions create many instances:
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+
+// Singleton pattern
+const globalForPool = globalThis as unknown as {
+  pool: Pool | undefined
+}
+
+const pool = globalForPool.pool ?? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,  // One connection per Lambda
+})
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPool.pool = pool
+}
+
+const adapter = new PrismaPg({ pool })
+export const prisma = new PrismaClient({ adapter })
+
+export async function handler(event: any) {
+  const users = await prisma.user.findMany()
+  return { statusCode: 200, body: JSON.stringify(users) }
+}
+```
+
+### Connection Pooler (PgBouncer)
+
+Use PgBouncer for serverless applications:
+
+```typescript
+const pool = new Pool({
+  connectionString: process.env.PGBOUNCER_URL,
+  max: 10,  // PgBouncer handles the real pooling
+})
+```
+
+**PgBouncer configuration**:
+```ini
+[databases]
+mydb = host=localhost port=5432 dbname=mydb
+
+[pgbouncer]
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 20
+```
+
+<Tip>
+Use `pool_mode = transaction` for most applications. This allows sharing connections between transactions.
+</Tip>
+
+## Connection Lifecycle
+
+### Connection Acquisition
+
+```typescript
+// Connection is acquired from pool
+const user = await prisma.user.findUnique({
+  where: { id: '1' },
+})
+// Connection is returned to pool
+```
+
+### Transaction Connection Management
+
+Transactions hold connections for their duration:
+
+```typescript
+// Connection held for entire transaction
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'user@example.com' },
+  })
+
+  const post = await tx.post.create({
+    data: {
+      title: 'First Post',
+      userId: user.id,
+    },
+  })
+  
+  // Long-running work holds the connection
+  await someAsyncWork()
+  
+  return { user, post }
+})
+// Connection returned to pool
+```
+
+<Warning>
+Keep transactions short. Long-running transactions can exhaust the connection pool:
+
+```typescript
+await prisma.$transaction(
+  async (tx) => {
+    // Keep this fast!
+  },
+  { timeout: 5000 }  // Set appropriate timeout
+)
+```
+</Warning>
+
+## Monitoring Connection Pool
+
+### Pool Metrics
+
+```typescript
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+})
+
+// Monitor pool metrics
+setInterval(() => {
+  console.log('Total connections:', pool.totalCount)
+  console.log('Idle connections:', pool.idleCount)
+  console.log('Waiting requests:', pool.waitingCount)
+}, 10000)
+```
+
+### Connection Events
+
+```typescript
+pool.on('connect', (client) => {
+  console.log('New client connected')
+})
+
+pool.on('acquire', (client) => {
+  console.log('Client acquired from pool')
+})
+
+pool.on('remove', (client) => {
+  console.log('Client removed from pool')
+})
+
+pool.on('error', (err, client) => {
+  console.error('Pool error:', err)
+})
+```
+
+## Best Practices
+
+### 1. Set Appropriate Pool Limits
+
+```typescript
+// Calculate based on database limits
+const DB_MAX_CONNECTIONS = 100
+const APP_INSTANCES = 5
+const POOL_SIZE = Math.floor(DB_MAX_CONNECTIONS / APP_INSTANCES)
+
+const pool = new Pool({
+  max: POOL_SIZE,  // 20 connections per instance
+})
+```
+
+### 2. Configure Timeouts
+
+```typescript
+const pool = new Pool({
+  connectionTimeoutMillis: 5000,  // Fail fast if pool exhausted
+  idleTimeoutMillis: 30000,       // Clean up idle connections
+  max: 20,
+})
+```
+
+### 3. Handle Connection Errors
+
+```typescript
+try {
+  const result = await prisma.user.findMany()
+} catch (error) {
+  if (error.code === 'P2024') {
+    // Connection pool timeout
+    console.error('Connection pool exhausted')
+  }
+  throw error
+}
+```
+
+### 4. Clean Up on Shutdown
+
+```typescript
+process.on('SIGTERM', async () => {
+  await prisma.$disconnect()
+  await pool.end()
+  process.exit(0)
+})
+```
+
+## SQLite Considerations
+
+SQLite doesn't use network connections:
+
+```typescript
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import Database from 'better-sqlite3'
+
+const db = new Database('prisma/dev.db', {
+  // WAL mode for better concurrency
+  wal: true,
+})
+
+const adapter = new PrismaBetterSqlite3(db)
+const prisma = new PrismaClient({ adapter })
+```
+
+<Tip>
+Enable WAL mode for better write concurrency in SQLite:
+```typescript
+const db = new Database('prisma/dev.db', { wal: true })
+```
+</Tip>
+
+## Troubleshooting
+
+### Connection Pool Exhaustion
+
+**Symptoms**:
+- Timeouts acquiring connections
+- "Too many clients already" errors
+- Slow query performance
+
+**Solutions**:
+1. Increase pool size (if database allows)
+2. Reduce transaction duration
+3. Use connection pooler (PgBouncer)
+4. Scale database vertically
+
+### Connection Leaks
+
+**Detection**:
+```typescript
+setInterval(() => {
+  if (pool.idleCount === 0 && pool.totalCount === pool.max) {
+    console.warn('Possible connection leak detected')
+  }
+}, 30000)
+```
+
+**Prevention**:
+- Always use `try/finally` with manual connection management
+- Set transaction timeouts
+- Monitor pool metrics
+
+## Performance Checklist
+
+- [ ] Pool size configured for your workload
+- [ ] Connection timeouts set appropriately
+- [ ] Idle timeout configured
+- [ ] Transaction timeouts enabled
+- [ ] Pool metrics monitored
+- [ ] Graceful shutdown implemented
+- [ ] Connection pooler used for serverless
+- [ ] Database connection limits considered
+- [ ] Error handling for pool exhaustion
+- [ ] WAL mode enabled for SQLite (if applicable)

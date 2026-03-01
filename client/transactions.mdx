@@ -1,0 +1,540 @@
+---
+title: Transactions
+description: Interactive and batch transactions in Prisma Client
+---
+
+# Transactions
+
+Prisma Client supports two types of transactions: batch transactions and interactive transactions.
+
+## Batch Transactions
+
+Execute multiple operations in a single database transaction:
+
+### Basic Batch Transaction
+
+```typescript
+const [user, post] = await prisma.$transaction([
+  prisma.user.create({
+    data: { email: 'alice@example.com' }
+  }),
+  prisma.post.create({
+    data: { title: 'My First Post' }
+  })
+])
+
+// All operations succeed or all fail
+```
+
+**How it works:**
+- All operations execute within a single database transaction
+- If any operation fails, all changes are rolled back
+- Returns array of results in the same order
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:705-728`
+
+### Array Must Contain PrismaPromises
+
+```typescript
+// ❌ Error: Elements must be Prisma Client promises
+await prisma.$transaction([
+  Promise.resolve(123),  // Error!
+  someAsyncFunction()    // Error!
+])
+
+// ✓ Correct
+await prisma.$transaction([
+  prisma.user.findMany(),
+  prisma.post.create({ data: { title: 'Hello' } })
+])
+```
+
+**Important:** Do not `await` the operations before passing them:
+
+```typescript
+// ❌ Wrong: Already awaited
+const user = await prisma.user.create({ data: { email: 'alice@example.com' } })
+await prisma.$transaction([user])  // Error!
+
+// ✓ Correct: Pass the promise
+await prisma.$transaction([
+  prisma.user.create({ data: { email: 'alice@example.com' } })
+])
+```
+
+### Transaction Options (Batch)
+
+```typescript
+await prisma.$transaction(
+  [
+    prisma.user.create({ data: { email: 'alice@example.com' } }),
+    prisma.post.create({ data: { title: 'Hello' } })
+  ],
+  {
+    isolationLevel: 'Serializable',  // Transaction isolation level
+    maxWait: 5000,                    // Max ms to wait for transaction start
+    timeout: 10000                    // Max ms transaction can run
+  }
+)
+```
+
+## Interactive Transactions
+
+Execute multiple operations with conditional logic:
+
+### Basic Interactive Transaction
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  // Create user
+  const user = await tx.user.create({
+    data: { email: 'alice@example.com' }
+  })
+
+  // Create post for that user
+  const post = await tx.post.create({
+    data: {
+      title: 'My First Post',
+      authorId: user.id
+    }
+  })
+
+  return { user, post }
+})
+
+// Committed automatically if callback succeeds
+// Rolled back automatically if callback throws
+```
+
+Source: `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:736-821`
+
+### Conditional Logic
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.findUnique({
+    where: { email: 'alice@example.com' }
+  })
+
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  if (user.balance < 100) {
+    throw new Error('Insufficient balance')
+  }
+
+  // Deduct from user
+  await tx.user.update({
+    where: { id: user.id },
+    data: { balance: { decrement: 100 } }
+  })
+
+  // Create purchase record
+  await tx.purchase.create({
+    data: {
+      userId: user.id,
+      amount: 100
+    }
+  })
+})
+```
+
+### Error Handling
+
+```typescript
+try {
+  await prisma.$transaction(async (tx) => {
+    await tx.user.create({
+      data: { email: 'duplicate@example.com' }
+    })
+
+    // This will throw if email is not unique
+    await tx.user.create({
+      data: { email: 'duplicate@example.com' }
+    })
+  })
+} catch (error) {
+  // Transaction rolled back
+  console.error('Transaction failed:', error)
+}
+```
+
+**Explicit rollback:**
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: { email: 'alice@example.com' }
+  })
+
+  if (someCondition) {
+    throw new Error('Rollback!')  // Throws to rollback
+  }
+
+  // More operations...
+})
+```
+
+### Transaction Client
+
+The `tx` parameter is a transaction-aware Prisma Client:
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  // All operations use tx, not prisma
+  await tx.user.create({ data: { email: 'alice@example.com' } })
+  await tx.post.create({ data: { title: 'Hello' } })
+
+  // ❌ Don't mix transaction and non-transaction clients
+  await prisma.comment.create({ data: { text: 'Hi' } })  // Runs OUTSIDE transaction!
+})
+```
+
+**Transaction client restrictions:**
+
+Certain operations are not available within transactions:
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  // ❌ These don't work in transactions
+  await tx.$transaction([])      // Error: Cannot nest $transaction
+  tx.$on('query', () => {})     // Error: $on not available
+  await tx.$disconnect()         // Error: Cannot disconnect within transaction
+})
+```
+
+Source: Transaction client deny list at `/home/daytona/workspace/source/packages/client/src/runtime/core/types/exported/itxClientDenyList.ts`
+
+### Transaction Options (Interactive)
+
+```typescript
+await prisma.$transaction(
+  async (tx) => {
+    // Transaction logic
+  },
+  {
+    maxWait: 5000,      // Max ms to wait for transaction start (default: 2000)
+    timeout: 10000,     // Max ms transaction can run (default: 5000)
+    isolationLevel: 'ReadCommitted'  // Transaction isolation level
+  }
+)
+```
+
+<ParamField path="maxWait" type="number" default="2000">
+  Maximum time (ms) to wait for a transaction slot to become available. If all connections are busy, the transaction waits up to this duration.
+</ParamField>
+
+<ParamField path="timeout" type="number" default="5000">
+  Maximum time (ms) the transaction can run before it's automatically rolled back.
+  
+  ```typescript
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.user.create({ data: { email: 'alice@example.com' } })
+      await delay(6000)  // Exceeds timeout!
+    },
+    { timeout: 5000 }
+  )
+  // Throws: P2028 - Transaction expired
+  ```
+</ParamField>
+
+<ParamField path="isolationLevel" type="IsolationLevel">
+  Controls transaction isolation level. Options:
+  - `ReadUncommitted`
+  - `ReadCommitted` (default for most databases)
+  - `RepeatableRead`
+  - `Snapshot` (SQL Server)
+  - `Serializable`
+  
+  ```typescript
+  await prisma.$transaction(
+    async (tx) => { /* ... */ },
+    { isolationLevel: 'Serializable' }
+  )
+  ```
+  
+  Availability varies by database provider.
+</ParamField>
+
+Source: Transaction options defined at `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:97-102,422-426,765-770`
+
+## Nested Transactions (Savepoints)
+
+Prisma supports nested interactive transactions using database savepoints:
+
+```typescript
+await prisma.$transaction(async (tx1) => {
+  await tx1.user.create({ data: { email: 'alice@example.com' } })
+
+  // Nested transaction
+  await tx1.$transaction(async (tx2) => {
+    await tx2.post.create({ data: { title: 'Post 1' } })
+    await tx2.post.create({ data: { title: 'Post 2' } })
+
+    // If this throws, only inner transaction rolls back
+  })
+
+  // User is still created
+})
+```
+
+**How savepoints work:**
+
+1. Outer transaction starts (`BEGIN`)
+2. Inner transaction creates savepoint (`SAVEPOINT sp1`)
+3. If inner transaction throws, rollback to savepoint (`ROLLBACK TO sp1`)
+4. If inner succeeds, release savepoint (provider-specific)
+5. Outer transaction commits (`COMMIT`)
+
+Source: Savepoint transaction management at `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:743-821`
+
+**Important constraints:**
+
+- Nested transactions must be closed in reverse order
+- MongoDB does not support nested transactions
+- Cloudflare D1 does not support interactive transactions at all
+
+```typescript
+// ❌ Error: Must close in reverse order
+await prisma.$transaction(async (tx1) => {
+  const promise = tx1.$transaction(async (tx2) => {
+    // Inner transaction
+  })
+
+  // Don't await yet - do other work
+  await tx1.user.create({ data: { email: 'test@example.com' } })
+
+  await promise  // Error: Must close nested tx before continuing
+})
+```
+
+## Timeout Behavior
+
+Transactions have two timeout scenarios:
+
+### Start Timeout (maxWait)
+
+If no connection is available:
+
+```typescript
+try {
+  await prisma.$transaction(
+    async (tx) => { /* ... */ },
+    { maxWait: 2000 }  // Wait max 2s for connection
+  )
+} catch (error) {
+  // Timeout waiting for connection
+}
+```
+
+### Execution Timeout (timeout)
+
+If transaction runs too long:
+
+```typescript
+const result = prisma.$transaction(
+  async (tx) => {
+    await tx.user.create({ data: { email: 'alice@example.com' } })
+    await delay(6000)  // Exceeds timeout
+  },
+  { timeout: 5000 }
+)
+
+await expect(result).rejects.toMatchObject({
+  code: 'P2028',
+  message: expect.stringMatching(/transaction.*expired/i)
+})
+```
+
+Source: Transaction timeout test at `/home/daytona/workspace/source/packages/client/tests/functional/interactive-transactions/tests.ts:68-88`
+
+## Default Transaction Options
+
+Set default options when creating the client:
+
+```typescript
+const prisma = new PrismaClient({
+  adapter,
+  transactionOptions: {
+    maxWait: 3000,
+    timeout: 10000,
+    isolationLevel: 'ReadCommitted'
+  }
+})
+
+// These defaults apply to all transactions
+await prisma.$transaction([...])
+```
+
+You can override defaults per transaction:
+
+```typescript
+await prisma.$transaction(
+  async (tx) => { /* ... */ },
+  { timeout: 15000 }  // Override default
+)
+```
+
+## Provider-Specific Behavior
+
+### PostgreSQL
+
+- Supports all isolation levels
+- Savepoint syntax: `SAVEPOINT name`, `ROLLBACK TO SAVEPOINT name`, `RELEASE SAVEPOINT name`
+- Nested transactions fully supported
+
+### MySQL
+
+- Supports: `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Serializable`
+- Savepoint syntax: `SAVEPOINT name`, `ROLLBACK TO name` (no `RELEASE`)
+- Nested transactions supported
+
+### SQLite
+
+- Limited isolation level support
+- Savepoint syntax: `SAVEPOINT name`, `ROLLBACK TO name`, `RELEASE name`
+- Nested transactions supported
+
+### SQL Server
+
+- Supports: `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Snapshot`, `Serializable`
+- Savepoint syntax: `SAVE TRANSACTION name`, `ROLLBACK TRANSACTION name` (no release)
+- Nested transactions supported
+
+### MongoDB
+
+- Limited isolation level support
+- Nested transactions not supported
+- Interactive transactions supported at top level
+
+### Cloudflare D1
+
+- Interactive transactions **not supported**
+- Only batch transactions available
+
+```typescript
+// ❌ Error with D1 adapter
+await prisma.$transaction(async (tx) => {
+  // Error: D1 does not support interactive transactions
+})
+
+// ✓ OK with D1
+await prisma.$transaction([
+  prisma.user.create({ data: { email: 'alice@example.com' } })
+])
+```
+
+Source: D1 transaction restriction at `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:858-862`
+
+## Transaction Scope and Context
+
+Interactive transactions maintain context across async boundaries:
+
+```typescript
+async function createUserAndProfile(tx: any, email: string) {
+  const user = await tx.user.create({ data: { email } })
+  await tx.profile.create({ data: { userId: user.id } })
+  return user
+}
+
+await prisma.$transaction(async (tx) => {
+  // Pass tx to helper functions
+  const user = await createUserAndProfile(tx, 'alice@example.com')
+  await createUserAndProfile(tx, 'bob@example.com')
+})
+```
+
+Source: Transaction context handling at `/home/daytona/workspace/source/packages/client/src/runtime/getPrismaClient.ts:238-251,743-761,823-845`
+
+## Best Practices
+
+### Keep Transactions Short
+
+```typescript
+// ❌ Bad: Long-running transaction
+await prisma.$transaction(async (tx) => {
+  const users = await tx.user.findMany()  // Could be thousands
+  for (const user of users) {
+    await sendEmail(user.email)  // External API call!
+    await tx.user.update({ where: { id: user.id }, data: { notified: true } })
+  }
+})
+
+// ✓ Good: Minimize transaction scope
+const users = await prisma.user.findMany()
+for (const user of users) {
+  await sendEmail(user.email)
+}
+
+await prisma.$transaction(
+  users.map(user => 
+    prisma.user.update({ where: { id: user.id }, data: { notified: true } })
+  )
+)
+```
+
+### Avoid External Calls in Transactions
+
+```typescript
+// ❌ Bad
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({ data: { email: 'alice@example.com' } })
+  await fetch('https://api.example.com/notify')  // External call
+  await tx.post.create({ data: { authorId: user.id, title: 'Hello' } })
+})
+
+// ✓ Good: External calls outside transaction
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({ data: { email: 'alice@example.com' } })
+  await tx.post.create({ data: { authorId: user.id, title: 'Hello' } })
+})
+
+await fetch('https://api.example.com/notify')
+```
+
+### Use Batch When Possible
+
+```typescript
+// Interactive transaction for simple operations
+await prisma.$transaction(async (tx) => {
+  await tx.user.create({ data: { email: 'alice@example.com' } })
+  await tx.post.create({ data: { title: 'Hello' } })
+})
+
+// ✓ Better: Use batch transaction (simpler, less overhead)
+await prisma.$transaction([
+  prisma.user.create({ data: { email: 'alice@example.com' } }),
+  prisma.post.create({ data: { title: 'Hello' } })
+])
+```
+
+### Handle Specific Errors
+
+```typescript
+try {
+  await prisma.$transaction(async (tx) => {
+    // Transaction logic
+  })
+} catch (error) {
+  if (error.code === 'P2028') {
+    console.error('Transaction timeout')
+  } else if (error.code === 'P2034') {
+    console.error('Transaction conflict')
+  } else {
+    console.error('Transaction failed:', error)
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Middleware" icon="layer-group" href="/client/middleware">
+    Hook into the query execution pipeline
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/client/error-handling">
+    Handle transaction errors and conflicts
+  </Card>
+</CardGroup>

@@ -1,0 +1,279 @@
+---
+title: PostgreSQL Driver Adapters
+description: Use JavaScript drivers for PostgreSQL with Prisma ORM
+---
+
+# PostgreSQL Driver Adapters
+
+Prisma ORM provides three driver adapters for PostgreSQL databases, each optimized for different use cases.
+
+## pg Adapter
+
+The `@prisma/adapter-pg` package enables usage of the popular [`node-postgres`](https://node-postgres.com/) (`pg`) driver with Prisma ORM.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-pg
+```
+
+### Usage
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@prisma/client'
+
+const connectionString = process.env.DATABASE_URL
+
+const adapter = new PrismaPg({ connectionString })
+const prisma = new PrismaClient({ adapter })
+```
+
+### Constructor Options
+
+The `PrismaPg` constructor accepts either:
+
+1. **Pool Configuration** (`pg.PoolConfig`):
+   ```typescript
+   import { PrismaPg } from '@prisma/adapter-pg'
+   
+   const adapter = new PrismaPg({
+     connectionString: process.env.DATABASE_URL,
+     max: 20,                    // Maximum pool size
+     idleTimeoutMillis: 30000,   // Close idle clients after 30 seconds
+     connectionTimeoutMillis: 2000,
+   })
+   ```
+
+2. **Existing Pool** (`pg.Pool`):
+   ```typescript
+   import { Pool } from 'pg'
+   import { PrismaPg } from '@prisma/adapter-pg'
+   
+   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+   const adapter = new PrismaPg(pool)
+   ```
+
+### Adapter Options
+
+The second parameter accepts `PrismaPgOptions`:
+
+```typescript
+type PrismaPgOptions = {
+  schema?: string                           // PostgreSQL schema name
+  disposeExternalPool?: boolean             // Close external pool on dispose (default: false)
+  onPoolError?: (err: Error) => void        // Handle pool-level errors
+  onConnectionError?: (err: Error) => void  // Handle connection-level errors
+  userDefinedTypeParser?: UserDefinedTypeParser  // Parse custom types
+}
+```
+
+Example with options:
+
+```typescript
+const adapter = new PrismaPg(
+  { connectionString: process.env.DATABASE_URL },
+  {
+    schema: 'public',
+    onPoolError: (err) => console.error('Pool error:', err),
+    onConnectionError: (err) => console.error('Connection error:', err),
+  }
+)
+```
+
+### Custom Type Parsing
+
+Handle user-defined PostgreSQL types:
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+
+const adapter = new PrismaPg(
+  { connectionString: process.env.DATABASE_URL },
+  {
+    userDefinedTypeParser: async (oid, value, adapter) => {
+      // Parse custom types based on OID
+      if (oid === 1234) {
+        return JSON.parse(value as string)
+      }
+      return value
+    },
+  }
+)
+```
+
+### Features
+
+- Full transaction support with all isolation levels
+- Savepoint support for nested transactions
+- Connection pooling
+- Custom type parsing for PostgreSQL UDTs
+- Schema specification
+
+---
+
+## Neon Adapter
+
+The `@prisma/adapter-neon` package enables usage of [Neon's serverless driver](https://github.com/neondatabase/serverless) with Prisma ORM.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-neon
+npm install ws  # Required for WebSocket support
+```
+
+### WebSocket Mode (Recommended)
+
+WebSocket connections provide full transaction support:
+
+```typescript
+import { neonConfig } from '@neondatabase/serverless'
+import { PrismaNeon } from '@prisma/adapter-neon'
+import { PrismaClient } from '@prisma/client'
+import ws from 'ws'
+
+// Configure WebSocket
+neonConfig.webSocketConstructor = ws
+
+const connectionString = process.env.DATABASE_URL
+
+const adapter = new PrismaNeon({ connectionString })
+const prisma = new PrismaClient({ adapter })
+```
+
+### HTTP Mode
+
+For environments without WebSocket support (some edge runtimes):
+
+```typescript
+import { neon } from '@neondatabase/serverless'
+import { PrismaNeonHttpAdapterFactory } from '@prisma/adapter-neon'
+import { PrismaClient } from '@prisma/client'
+
+const connectionString = process.env.DATABASE_URL
+
+const adapterFactory = new PrismaNeonHttpAdapterFactory(connectionString, {
+  arrayMode: false,
+  fullResults: false,
+})
+
+const adapter = await adapterFactory.connect()
+const prisma = new PrismaClient({ adapter })
+```
+
+**Note**: HTTP mode does not support transactions.
+
+### Constructor Options
+
+WebSocket mode (`PrismaNeon`) accepts `neon.PoolConfig`:
+
+```typescript
+import { PrismaNeon } from '@prisma/adapter-neon'
+
+const adapter = new PrismaNeon({
+  connectionString: process.env.DATABASE_URL,
+  maxConnections: 10,
+})
+```
+
+### Adapter Options
+
+```typescript
+type PrismaNeonOptions = {
+  schema?: string                           // PostgreSQL schema name
+  onPoolError?: (err: Error) => void        // Handle pool-level errors
+  onConnectionError?: (err: Error) => void  // Handle connection-level errors
+}
+```
+
+### Features
+
+- WebSocket-based low-latency connections
+- Message pipelining for improved performance
+- Full transaction support (WebSocket mode only)
+- Edge runtime compatible
+
+### Connection String Format
+
+```
+postgres://user:password@server.us-east-2.aws.neon.tech/neondb
+```
+
+---
+
+## Prisma Postgres Adapter
+
+The `@prisma/adapter-ppg` package enables usage of the [@prisma/ppg](https://github.com/prisma/ppg-client) serverless driver for Prisma Postgres.
+
+### Installation
+
+```bash
+npm install @prisma/adapter-ppg
+```
+
+### Usage
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaPostgresAdapter } from '@prisma/adapter-ppg'
+
+const connectionString = process.env.PRISMA_DIRECT_TCP_URL
+
+const adapter = new PrismaPostgresAdapter({ connectionString })
+const prisma = new PrismaClient({ adapter })
+```
+
+### Features
+
+- Optimized for Prisma Postgres
+- HTTP and WebSocket-based connections
+- Serverless and edge runtime support
+- Full transaction support
+
+### Connection String Format
+
+Use the Direct TCP connection string from your Prisma Postgres dashboard:
+
+```
+postgres://identifier:key@db.prisma.io:5432/postgres?sslmode=require
+```
+
+---
+
+## Comparison
+
+| Feature | pg | Neon | Prisma Postgres |
+|---------|----|----- |----------------- |
+| **Runtime** | Node.js | Node.js, Edge | Node.js, Edge |
+| **Protocol** | TCP | WebSocket, HTTP | TCP, HTTP, WebSocket |
+| **Transactions** | Yes | Yes (WS only) | Yes |
+| **Connection Pool** | Yes | Yes | Yes |
+| **Custom Types** | Yes | Yes | Yes |
+| **Best For** | Traditional Node.js apps | Serverless, low-latency | Prisma Postgres databases |
+
+## Migration Support
+
+All PostgreSQL adapters support migrations through the `SqlMigrationAwareDriverAdapterFactory` interface (except Neon HTTP mode).
+
+## Error Handling
+
+All adapters map PostgreSQL errors to Prisma error codes:
+
+```typescript
+try {
+  await prisma.user.create({
+    data: { email: 'duplicate@example.com' }
+  })
+} catch (error) {
+  if (error.code === 'P2002') {
+    // Unique constraint violation
+  }
+}
+```
+
+## Next Steps
+
+- [MySQL/MariaDB Adapters](/adapters/mysql)
+- [SQLite Adapters](/adapters/sqlite)
+- [Driver Adapters Overview](/adapters/overview)

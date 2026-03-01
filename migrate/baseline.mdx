@@ -1,0 +1,474 @@
+---
+title: Baselining an Existing Database
+description: Learn how to baseline an existing production database to start using Prisma Migrate without data loss.
+---
+
+Baselining allows you to initialize Prisma Migrate on an existing database without applying migrations that would recreate existing tables.
+
+## What is Baselining?
+
+Baselining is the process of initializing a migration history for a database that:
+- Already exists in production
+- Has existing tables and data
+- Was not previously managed by Prisma Migrate
+
+Without baselining, running migrations would try to create tables that already exist, causing errors.
+
+## When to Baseline
+
+You need to baseline when:
+- Adding Prisma Migrate to an existing project
+- Migrating from another migration tool (Flyway, Liquibase, etc.)
+- Moving from `prisma db push` to `prisma migrate`
+- Your database schema was created manually
+
+## Baselining Workflow
+
+This is the complete workflow for adding Prisma Migrate to an existing production database.
+
+<Steps>
+  <Step title="Introspect Your Database">
+    Start by pulling the current database schema:
+
+    ```bash
+    prisma db pull
+    ```
+
+    This creates a Prisma schema that matches your existing database:
+
+    ```prisma
+    model User {
+      id         Int      @id @default(autoincrement())
+      email      String   @unique
+      name       String?
+      created_at DateTime @default(now())
+    }
+    ```
+  </Step>
+
+  <Step title="Create a Development Database">
+    Set up a fresh development database to test migrations:
+
+    ```bash
+    # In development environment
+    export DATABASE_URL="postgresql://user:pass@localhost:5432/dev_db"
+    ```
+  </Step>
+
+  <Step title="Reset Development Database">
+    Clear the development database:
+
+    ```bash
+    prisma migrate reset --force
+    ```
+
+    Output:
+    ```
+    Datasource "db": PostgreSQL database "dev_db" at "localhost:5432"
+
+    Database reset successful
+    ```
+  </Step>
+
+  <Step title="Create Initial Migration">
+    Generate a migration that represents your current schema:
+
+    ```bash
+    prisma migrate dev --name init --create-only
+    ```
+
+    Output:
+    ```
+    Prisma Migrate created the following migration without applying it 20201231000000_init
+
+    You can now edit it and apply it by running prisma migrate dev.
+    ```
+
+    This creates:
+    ```
+    prisma/
+      └─ migrations/
+        └─ 20201231000000_init/
+          └─ migration.sql
+    ```
+  </Step>
+
+  <Step title="Review the Migration">
+    The generated migration contains SQL to create all tables:
+
+    ```sql prisma/migrations/20201231000000_init/migration.sql
+    -- CreateTable
+    CREATE TABLE "User" (
+        "id" SERIAL NOT NULL,
+        "email" TEXT NOT NULL,
+        "name" TEXT,
+        "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+        CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    );
+
+    -- CreateIndex
+    CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+    ```
+  </Step>
+
+  <Step title="Apply to Development">
+    Apply the migration to your development database:
+
+    ```bash
+    prisma migrate dev
+    ```
+
+    Output:
+    ```
+    The following migration(s) have been applied:
+
+    migrations/
+      └─ 20201231000000_init/
+        └─ migration.sql
+
+    Your database is now in sync with your schema.
+    ```
+  </Step>
+
+  <Step title="Baseline Production Database">
+    Now baseline your production database. Switch to the production database URL:
+
+    ```bash
+    # In production environment
+    export DATABASE_URL="postgresql://user:pass@prod:5432/prod_db"
+    ```
+
+    Mark the migration as already applied without executing it:
+
+    ```bash
+    prisma migrate resolve --applied "20201231000000_init"
+    ```
+
+    Output:
+    ```
+    Datasource "db": PostgreSQL database "prod_db" at "prod:5432"
+
+    Migration 20201231000000_init marked as applied.
+    ```
+
+    This creates the `_prisma_migrations` table in production and records the baseline migration as applied.
+  </Step>
+
+  <Step title="Verify Production Status">
+    Check that production is properly baselined:
+
+    ```bash
+    prisma migrate status
+    ```
+
+    Output:
+    ```
+    1 migration found in prisma/migrations
+
+    Database schema is up to date!
+    ```
+  </Step>
+
+  <Step title="Deploy Future Migrations">
+    Now you can deploy new migrations to production:
+
+    ```bash
+    prisma migrate deploy
+    ```
+
+    Output:
+    ```
+    No pending migrations to apply.
+    ```
+  </Step>
+</Steps>
+
+## The migrate resolve Command
+
+`prisma migrate resolve` is used to mark migrations as applied or rolled back without executing them.
+
+### Mark as Applied
+
+Record a migration as successfully applied:
+
+```bash
+prisma migrate resolve --applied "20201231000000_init"
+```
+
+Use when:
+- Baselining an existing database
+- A migration was applied manually (hotfix)
+- Recovering from migration table corruption
+
+### Mark as Rolled Back
+
+Record a migration as rolled back:
+
+```bash
+prisma migrate resolve --rolled-back "20201231000000_failed_migration"
+```
+
+Use when:
+- A migration failed and was manually rolled back
+- Recovering from a failed migration
+
+## Checking Migration Status
+
+Use `prisma migrate status` to identify if baselining is needed:
+
+```bash
+prisma migrate status
+```
+
+### When Baselining is Needed
+
+You'll see this output:
+
+```
+1 migration found in prisma/migrations
+
+The current database is not managed by Prisma Migrate.
+
+If you want to keep the current database structure and data and create new migrations, 
+baseline this database with the migration "20201231000000_init":
+prisma migrate resolve --applied "20201231000000_init"
+
+Read more about how to baseline an existing production database:
+https://pris.ly/d/migrate-baseline
+```
+
+## Multiple Environments
+
+When you have multiple environments (dev, staging, production), baseline each separately:
+
+### Development (Already Done)
+
+```bash
+export DATABASE_URL="postgresql://localhost/dev_db"
+prisma migrate dev
+```
+
+### Staging
+
+```bash
+export DATABASE_URL="postgresql://staging-host/staging_db"
+prisma migrate resolve --applied "20201231000000_init"
+prisma migrate deploy  # Apply any additional migrations
+```
+
+### Production
+
+```bash
+export DATABASE_URL="postgresql://prod-host/prod_db"
+prisma migrate resolve --applied "20201231000000_init"
+prisma migrate deploy  # Apply any additional migrations
+```
+
+## Complete Example: SQLite
+
+Here's a complete baselining example with SQLite:
+
+<Steps>
+  <Step title="Set Up Development Database">
+    ```bash
+    # Create development database
+    export DATABASE_URL="file:./dev.db"
+    ```
+  </Step>
+
+  <Step title="Introspect">
+    ```bash
+    prisma db pull
+    ```
+  </Step>
+
+  <Step title="Reset and Create Migration">
+    ```bash
+    prisma migrate reset --force
+    prisma migrate dev --create-only --name init
+    ```
+  </Step>
+
+  <Step title="Apply to Development">
+    ```bash
+    prisma migrate dev
+    ```
+
+    Output:
+    ```
+    The following migration(s) have been applied:
+
+    migrations/
+      └─ 20201231000000_init/
+        └─ migration.sql
+
+    Your database is now in sync with your schema.
+    ```
+  </Step>
+
+  <Step title="Baseline Production">
+    ```bash
+    # Copy production database
+    cp prod.db prod-backup.db
+
+    # Switch to production
+    export DATABASE_URL="file:./prod.db"
+
+    # Baseline
+    prisma migrate resolve --applied "20201231000000_init"
+    ```
+
+    Output:
+    ```
+    Migration 20201231000000_init marked as applied.
+    ```
+  </Step>
+
+  <Step title="Verify">
+    ```bash
+    prisma migrate status
+    ```
+
+    Output:
+    ```
+    1 migration found in prisma/migrations
+
+    Database schema is up to date!
+    ```
+  </Step>
+</Steps>
+
+## Baselining After Failed Migrations
+
+If a migration fails in production:
+
+<Steps>
+  <Step title="Check Status">
+    ```bash
+    prisma migrate status
+    ```
+
+    Output:
+    ```
+    Following migration has failed:
+    20210115120000_add_analytics
+
+    The failed migration can be marked as rolled back or applied:
+
+    - If you rolled back the migration manually:
+    prisma migrate resolve --rolled-back "20210115120000_add_analytics"
+
+    - If you fixed the database manually (hotfix):
+    prisma migrate resolve --applied "20210115120000_add_analytics"
+    ```
+  </Step>
+
+  <Step title="Fix Manually (Hotfix)">
+    Connect to the database and apply the fix manually:
+
+    ```sql
+    -- Apply the migration SQL manually
+    ALTER TABLE "Analytics" ADD COLUMN "event_name" TEXT;
+    ```
+  </Step>
+
+  <Step title="Mark as Applied">
+    ```bash
+    prisma migrate resolve --applied "20210115120000_add_analytics"
+    ```
+  </Step>
+
+  <Step title="Verify">
+    ```bash
+    prisma migrate status
+    ```
+
+    Output:
+    ```
+    Database schema is up to date!
+    ```
+  </Step>
+</Steps>
+
+## Diverged Migration History
+
+If local and database migration histories diverge:
+
+```bash
+prisma migrate status
+```
+
+Output:
+```
+Your local migration history and the migrations table from your database are different:
+
+The last common migration is: 20201231000000_init
+
+The migrations have not yet been applied:
+20210201000000_add_posts
+
+The migrations from the database are not found locally in prisma/migrations:
+20210115000000_hotfix
+```
+
+Solutions:
+1. Pull the missing migrations from version control
+2. Delete the diverged migration from the database
+3. Re-baseline if the divergence is too complex
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test First" icon="vial">
+    Always test the baselining process in a staging environment first.
+  </Card>
+  <Card title="Backup Production" icon="database">
+    Create a full database backup before baselining production.
+  </Card>
+  <Card title="Document Process" icon="book">
+    Document your baselining steps for team reference.
+  </Card>
+  <Card title="Verify Status" icon="check-circle">
+    Always run `migrate status` after baselining to confirm success.
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+### Issue: Tables Already Exist
+
+```
+Error: P3005
+The database schema is not empty.
+```
+
+Solution: Use `migrate resolve --applied` to baseline instead of `migrate dev`.
+
+### Issue: Migration Not Found
+
+```
+Error: Migration 20201231000000_init not found
+```
+
+Solution: Ensure the migration directory exists in `prisma/migrations/`.
+
+### Issue: Multiple Developers
+
+If multiple developers created migrations before baselining:
+
+1. Agree on a single baseline migration
+2. Delete local migrations
+3. Pull the agreed baseline from git
+4. Baseline all environments
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Migration Workflows" icon="workflow" href="/migrate/migration-workflows">
+    Learn production migration workflows
+  </Card>
+  <Card title="Resolve Failed Migrations" icon="wrench" href="/migrate/migration-workflows#handling-failed-migrations">
+    Handle failed migrations in production
+  </Card>
+</CardGroup>

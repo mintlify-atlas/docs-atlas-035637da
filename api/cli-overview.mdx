@@ -1,0 +1,160 @@
+---
+title: 'CLI Overview'
+description: 'Complete reference for the Prisma CLI with global options and available commands'
+---
+
+# Prisma CLI Overview
+
+Prisma CLI is a modern database toolkit for querying, migrating, and modeling your database.
+
+## Installation
+
+```bash
+npm install prisma --save-dev
+```
+
+## Usage
+
+```bash
+prisma [command] [options]
+```
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `init` | Set up Prisma for your app |
+| `dev` | Start a local Prisma Postgres server for development |
+| `generate` | Generate artifacts (e.g. Prisma Client) |
+| `db` | Manage your database schema and lifecycle |
+| `migrate` | Migrate your database |
+| `studio` | Browse your data with Prisma Studio |
+| `validate` | Validate your Prisma schema |
+| `format` | Format your Prisma schema |
+| `version` | Display Prisma version info |
+| `debug` | Display Prisma debug info |
+| `platform` | Prisma Data Platform commands |
+| `mcp` | Start an MCP server to use with AI development tools |
+
+## Global Options
+
+<ParamField path="--help" type="boolean">
+  Show help information for any command.
+  
+  **Alias:** `-h`
+  
+  ```bash
+  prisma --help
+  prisma generate --help
+  ```
+</ParamField>
+
+<ParamField path="--version" type="boolean">
+  Display Prisma version information.
+  
+  **Alias:** `-v`
+  
+  ```bash
+  prisma --version
+  ```
+</ParamField>
+
+<ParamField path="--config" type="string">
+  Custom path to your Prisma config file.
+  
+  ```bash
+  prisma generate --config=./custom/prisma.config.ts
+  ```
+</ParamField>
+
+<ParamField path="--preview-feature" type="boolean">
+  Run Preview Prisma commands.
+  
+  ```bash
+  prisma [command] --preview-feature
+  ```
+</ParamField>
+
+## Common Examples
+
+### Initialize a new project
+
+```bash
+prisma init
+```
+
+### Start local development server
+
+```bash
+prisma dev
+```
+
+### Generate Prisma Client
+
+```bash
+prisma generate
+```
+
+### Open Prisma Studio
+
+```bash
+prisma studio
+```
+
+### Run migrations in development
+
+```bash
+prisma migrate dev
+```
+
+### Pull schema from database
+
+```bash
+prisma db pull
+```
+
+### Push schema to database
+
+```bash
+prisma db push
+```
+
+### Validate schema
+
+```bash
+prisma validate
+```
+
+### Format schema
+
+```bash
+prisma format
+```
+
+## Getting Help
+
+For detailed help on any command, use the `--help` flag:
+
+```bash
+prisma [command] --help
+```
+
+For example:
+
+```bash
+prisma migrate --help
+prisma db --help
+prisma generate --help
+```
+
+## Exit Codes
+
+- `0` - Success
+- `1` - General error
+- `130` - User cancelled operation (SIGINT)
+
+## Configuration
+
+The Prisma CLI reads configuration from `prisma.config.ts` (or `prisma.config.js`) by default. You can specify a custom config path with the `--config` option.
+
+For legacy projects, the CLI also supports `schema.prisma` files with the `--schema` option.
