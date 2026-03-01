@@ -110,12 +110,14 @@
             "group": "CLI Commands",
             "pages": [
               "api/cli-overview",
+              "api/prisma-init",
               "api/prisma-generate",
               "api/prisma-migrate",
               "api/prisma-db",
               "api/prisma-studio",
               "api/prisma-validate",
-              "api/prisma-format"
+              "api/prisma-format",
+              "api/prisma-version"
             ]
           },
           {

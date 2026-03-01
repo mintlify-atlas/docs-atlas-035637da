@@ -1,0 +1,186 @@
+---
+title: prisma version
+description: Display Prisma CLI and dependency versions
+---
+
+The `prisma version` command displays version information for the Prisma CLI and related dependencies.
+
+## Usage
+
+```bash
+npx prisma version
+```
+
+Or using the shorthand:
+
+```bash
+npx prisma -v
+```
+
+## Output
+
+The command displays:
+
+- Prisma CLI version
+- Current project directory
+- Prisma engines version
+- Node.js version
+- Operating system information
+
+### Example output
+
+```
+prisma                  : 7.5.0
+@prisma/client          : 7.5.0
+Computed binaryTarget   : darwin-arm64
+Operating System        : darwin
+Architecture            : arm64
+Node.js                 : v20.19.0
+```
+
+## Options
+
+<ParamField path="--json" type="boolean">
+  Output version information in JSON format
+</ParamField>
+
+<ParamField path="--help" type="boolean">
+  Display help information
+</ParamField>
+
+<ParamField path="-h" type="boolean">
+  Alias for `--help`
+</ParamField>
+
+## JSON output
+
+Use `--json` to get machine-readable output:
+
+```bash
+npx prisma version --json
+```
+
+Example JSON output:
+
+```json
+{
+  "prisma": "7.5.0",
+  "@prisma/client": "7.5.0",
+  "binaryTarget": "darwin-arm64",
+  "os": "darwin",
+  "arch": "arm64",
+  "nodeVersion": "v20.19.0"
+}
+```
+
+## Use cases
+
+### Check installed version
+
+Verify which version of Prisma is installed:
+
+```bash
+npx prisma version
+```
+
+### Debug version mismatches
+
+When reporting issues or debugging, version information is crucial:
+
+```bash
+npx prisma version
+```
+
+### CI/CD integration
+
+Use JSON output in automated scripts:
+
+```bash
+PRISMA_VERSION=$(npx prisma version --json | jq -r '.prisma')
+echo "Prisma version: $PRISMA_VERSION"
+```
+
+### Version compatibility check
+
+Compare CLI and client versions to ensure compatibility:
+
+```bash
+npx prisma version
+```
+
+<Warning>
+The `@prisma/client` and `prisma` CLI versions should match to avoid compatibility issues. Run `npm install prisma@latest @prisma/client@latest` to sync versions.
+</Warning>
+
+## Binary targets
+
+The output includes the computed binary target, which determines which Prisma engine binaries are downloaded. Common binary targets include:
+
+- `darwin-arm64` - macOS on Apple Silicon
+- `darwin-x64` - macOS on Intel
+- `linux-x64-gnu` - Linux (glibc)
+- `linux-x64-musl` - Linux (musl, e.g., Alpine)
+- `windows-x64` - Windows
+
+## Environment information
+
+The command reports:
+
+### Node.js version
+
+The version of Node.js running Prisma. Prisma requires:
+- Node.js 20.19 or higher
+- Node.js 22.12 or higher
+- Node.js 24.0 or higher
+
+### Operating system
+
+The platform where Prisma is running:
+- `darwin` - macOS
+- `linux` - Linux
+- `win32` - Windows
+
+### Architecture
+
+The CPU architecture:
+- `arm64` - ARM 64-bit (Apple Silicon, ARM servers)
+- `x64` - x86 64-bit (Intel/AMD)
+
+## Troubleshooting
+
+### Version mismatch
+
+If CLI and client versions differ:
+
+```bash
+npm install prisma@latest @prisma/client@latest
+```
+
+Or with specific version:
+
+```bash
+npm install prisma@7.5.0 @prisma/client@7.5.0
+```
+
+### Binary target issues
+
+If the wrong binary target is detected, you can manually specify it in your schema:
+
+```prisma
+generator client {
+  provider      = "prisma-client"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "linux-musl"]
+}
+```
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="prisma init" icon="rocket" href="/api/prisma-init">
+    Initialize a new Prisma project
+  </Card>
+  <Card title="prisma generate" icon="code" href="/api/prisma-generate">
+    Generate Prisma Client
+  </Card>
+</CardGroup>

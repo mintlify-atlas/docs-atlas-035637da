@@ -1,0 +1,240 @@
+---
+title: prisma init
+description: Initialize a new Prisma project with schema and configuration files
+---
+
+The `prisma init` command creates the necessary files to start using Prisma ORM in your project.
+
+## Usage
+
+```bash
+npx prisma init
+```
+
+## What it creates
+
+The `init` command creates:
+
+1. **`prisma/schema.prisma`** - Prisma schema file with datasource and generator configuration
+2. **`prisma.config.ts`** - Prisma configuration file for connection and settings
+3. **`.env`** (if datasource requires it) - Environment file for database credentials
+
+## Options
+
+<ParamField path="--url" type="string">
+  Database connection URL to use instead of prompting
+</ParamField>
+
+<ParamField path="--datasource-provider" type="string">
+  Database provider to use: `postgresql`, `mysql`, `sqlite`, `sqlserver`, `mongodb`, `cockroachdb`
+</ParamField>
+
+<ParamField path="--generator-provider" type="string">
+  Generator provider to use (default: `prisma-client`)
+</ParamField>
+
+<ParamField path="--output" type="string">
+  Custom output directory for generated Prisma Client (default: `../generated/prisma`)
+</ParamField>
+
+<ParamField path="--with-model" type="boolean">
+  Include a sample User model in the schema
+</ParamField>
+
+<ParamField path="--db" type="boolean">
+  Create a Prisma Postgres database (interactive flow)
+</ParamField>
+
+<ParamField path="--region" type="string">
+  Region for Prisma Postgres database
+</ParamField>
+
+<ParamField path="--name" type="string">
+  Name for Prisma Postgres database
+</ParamField>
+
+<ParamField path="--non-interactive" type="boolean">
+  Run in non-interactive mode using provided flags
+</ParamField>
+
+<ParamField path="--preview-feature" type="string[]">
+  Enable preview features (can be specified multiple times)
+</ParamField>
+
+## Examples
+
+### Basic initialization
+
+Create a new Prisma project with interactive prompts:
+
+```bash
+npx prisma init
+```
+
+### Initialize with specific database
+
+Initialize with PostgreSQL:
+
+```bash
+npx prisma init --datasource-provider postgresql
+```
+
+Initialize with SQLite:
+
+```bash
+npx prisma init --datasource-provider sqlite
+```
+
+### Initialize with connection URL
+
+Skip the provider selection and use a specific database URL:
+
+```bash
+npx prisma init --url "postgresql://user:password@localhost:5432/mydb"
+```
+
+### Initialize with sample model
+
+Create the project with a sample User model:
+
+```bash
+npx prisma init --datasource-provider postgresql --with-model
+```
+
+### Non-interactive initialization
+
+Initialize without prompts (useful for CI/CD):
+
+```bash
+npx prisma init \
+  --datasource-provider postgresql \
+  --generator-provider prisma-client \
+  --output ../generated/prisma \
+  --non-interactive
+```
+
+### Initialize with Prisma Postgres
+
+Create a new Prisma Postgres database:
+
+```bash
+npx prisma init --db
+```
+
+This will:
+1. Prompt you to log in to Prisma
+2. Create a new database in your account
+3. Configure your project with the connection string
+
+You can also specify database details:
+
+```bash
+npx prisma init --db --name my-app-db --region us-east-1
+```
+
+## Generated schema file
+
+The default schema file created by `init`:
+
+```prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+With `--with-model` flag:
+
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+}
+```
+
+## Generated config file
+
+The `prisma.config.ts` file:
+
+```typescript
+import { defineConfig, env } from 'prisma/config'
+
+export default defineConfig({
+  datasource: {
+    url: env('DATABASE_URL'),
+  },
+})
+```
+
+## Workflow
+
+After running `init`, the typical workflow is:
+
+<Steps>
+  <Step title="Set up database connection">
+    Update `prisma.config.ts` with your database URL or set the `DATABASE_URL` environment variable.
+  </Step>
+  
+  <Step title="Define your data model">
+    Edit `prisma/schema.prisma` to define your models.
+  </Step>
+  
+  <Step title="Create migrations">
+    Run `npx prisma migrate dev` to create and apply migrations.
+  </Step>
+  
+  <Step title="Generate Prisma Client">
+    Run `npx prisma generate` to generate the type-safe client.
+  </Step>
+</Steps>
+
+## Supported providers
+
+The `--datasource-provider` flag accepts:
+
+- `postgresql` - PostgreSQL (9.6+)
+- `mysql` - MySQL (5.7+) and MariaDB (10.2+)
+- `sqlite` - SQLite (3.x)
+- `sqlserver` - Microsoft SQL Server (2017+)
+- `mongodb` - MongoDB (4.2+)
+- `cockroachdb` - CockroachDB (21.2.4+)
+
+## Error handling
+
+<Warning>
+The `init` command will not overwrite existing files. If `prisma/schema.prisma` or `prisma.config.ts` already exist, you'll need to manually integrate the changes.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Define your schema" icon="diagram-project" href="/concepts/schema">
+    Learn about Prisma Schema Language
+  </Card>
+  <Card title="Run migrations" icon="arrows-rotate" href="/migrate/getting-started">
+    Create your first migration
+  </Card>
+  <Card title="Generate Client" icon="code" href="/api/prisma-generate">
+    Generate your type-safe database client
+  </Card>
+  <Card title="Prisma Config" icon="gear" href="/api/prisma-config">
+    Configure your Prisma project
+  </Card>
+</CardGroup>
